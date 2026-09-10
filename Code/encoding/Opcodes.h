@@ -127,5 +127,6 @@ enum ServerOpcode : unsigned char
     kNotifyTradeState,
     kNotifyTradeCancel,
     kNotifyTradeComplete,
+    kNotifyRemoveObjects,
     kServerOpcodeMax
 };
