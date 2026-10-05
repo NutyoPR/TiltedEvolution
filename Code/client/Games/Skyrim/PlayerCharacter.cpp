@@ -8,6 +8,7 @@
 #include <Games/Overrides.h>
 
 #include <Events/InventoryChangeEvent.h>
+#include <Events/ReferencePickUpEvent.h>
 #include <Events/BeastFormChangeEvent.h>
 #include <Events/AddExperienceEvent.h>
 #include <Events/SetWaypointEvent.h>
@@ -182,7 +183,11 @@ char TP_MAKE_THISCALL(HookPickUpObject, PlayerCharacter, TESObjectREFR* apObject
     // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
     bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
 
-    World::Get().GetRunner().Trigger(InventoryChangeEvent(apThis->formID, std::move(item), false, shouldUpdateClients));
+    World::Get().GetRunner().Trigger(InventoryChangeEvent(apThis->formID, std::move(item), shouldUpdateClients));
+
+    // A dropped item may be server-tracked; the other clients need to delete their copy.
+    if (apObject->IsTemporary())
+        World::Get().GetRunner().Trigger(ReferencePickUpEvent(apObject->formID));
 
     ScopedInventoryOverride _;
 

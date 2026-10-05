@@ -5,8 +5,6 @@
 
 /**
  * @brief Dispatched when the contents of an object or actor inventory changes locally.
- *
- * The event has a Drop member variable, since dropped items need to be handled differently.
  */
 struct InventoryChangeEvent
 {
@@ -16,24 +14,15 @@ struct InventoryChangeEvent
     {
     }
 
-    InventoryChangeEvent(const uint32_t aFormId, Inventory::Entry arItem, bool aDrop)
+    InventoryChangeEvent(const uint32_t aFormId, Inventory::Entry arItem, bool aUpdateClients)
         : FormId(aFormId)
         , Item(std::move(arItem))
-        , Drop(aDrop)
-    {
-    }
-
-    InventoryChangeEvent(const uint32_t aFormId, Inventory::Entry arItem, bool aDrop, bool aUpdateClients)
-        : FormId(aFormId)
-        , Item(std::move(arItem))
-        , Drop(aDrop)
         , UpdateClients(aUpdateClients)
     {
     }
 
     uint32_t FormId{};
     Inventory::Entry Item{};
-    bool Drop = false;
     bool UpdateClients = true;
     // The item moved to or from the local player, e.g. looting or pickpocketing an actor owned by someone else
     bool IsPlayerTransfer = false;

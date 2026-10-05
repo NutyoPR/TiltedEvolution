@@ -66,6 +66,10 @@
 #include <Messages/NotifySetTimeResult.h>
 #include <Messages/NotifyActionEvents.h>
 #include <Messages/NotifyRemoveObjects.h>
+#include <Messages/DropItemResponse.h>
+#include <Messages/NotifyDroppedItemsSpawn.h>
+#include <Messages/NotifyDroppedItemMove.h>
+#include <Messages/NotifyDroppedItemsRemove.h>
 
 using TiltedPhoques::UniquePtr;
 
@@ -79,7 +83,7 @@ struct ServerMessageFactory
             AuthenticationResponse, AssignCharacterResponse, ServerReferencesMoveRequest, ServerTimeSettings, CharacterSpawnRequest, NotifyInventoryChanges, NotifyInventorySnapshot, StringCacheUpdate, NotifyFactionsChanges, NotifyRemoveCharacter, NotifyQuestUpdate, NotifyPlayerList, NotifyPartyInfo, NotifyPartyInvite, NotifyActorValueChanges, NotifyPartyJoined, NotifyPartyLeft, NotifyTradeInvite, NotifyTradeStarted, NotifyTradeState, NotifyTradeCancel, NotifyTradeComplete, NotifyActorMaxValueChanges, NotifyHealthChangeBroadcast, NotifyActivate, NotifyLockChange, AssignObjectsResponse, NotifyDeathStateChange, NotifyOwnershipTransfer, NotifyObjectInventoryChanges, NotifySpellCast,
             NotifyProjectileLaunch, NotifyInterruptCast, NotifyAddTarget, NotifyScriptAnimation, NotifyDrawWeapon, NotifyMount, NotifyNewPackage, NotifyRespawn, NotifySyncExperience, NotifyEquipmentChanges, NotifyChatMessageBroadcast, TeleportCommandResponse, NotifyPlayerRespawn, NotifyDialogue,
             NotifySubtitle, NotifyPlayerDialogue, NotifyActorTeleport, NotifyPlayerLeft, NotifyPlayerJoined, NotifyDialogue, NotifySubtitle, NotifyPlayerDialogue, NotifyPlayerLevel, NotifyPlayerCellChanged, NotifyTeleport, NotifyPlayerHealthUpdate, NotifySettingsChange,
-            NotifyWeatherChange, NotifySetWaypoint, NotifyRemoveWaypoint, NotifySetTimeResult, NotifyRemoveSpell, NotifyActionEvents, NotifyRemoveObjects>;
+            NotifyWeatherChange, NotifySetWaypoint, NotifyRemoveWaypoint, NotifySetTimeResult, NotifyRemoveSpell, NotifyActionEvents, NotifyRemoveObjects, DropItemResponse, NotifyDroppedItemsSpawn, NotifyDroppedItemMove, NotifyDroppedItemsRemove>;
 
         return s_visitor(std::forward<T>(func));
     }

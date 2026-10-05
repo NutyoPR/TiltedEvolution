@@ -90,7 +90,6 @@ void InventoryService::OnInventoryChangeEvent(const InventoryChangeEvent& acEven
     request.ServerId = serverId;
     request.OwnershipEpoch = ownershipEpoch;
     request.Item = acEvent.Item;
-    request.Drop = acEvent.Drop;
     request.UpdateClients = acEvent.UpdateClients;
 
     m_transport.Send(request);
@@ -157,8 +156,7 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
             if (auto* pWaitingFor3D = m_world.try_get<WaitingFor3D>(*remoteEntity))
             {
                 pWaitingFor3D->SpawnRequest.InventoryContent.AddOrRemoveEntry(acMessage.Item);
-                if (!acMessage.Drop)
-                    return;
+                return;
             }
 
             if (const auto* pFormIdComponent = m_world.try_get<FormIdComponent>(*remoteEntity))
@@ -178,11 +176,7 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
         }
 
         ScopedInventoryOverride _;
-
-        if (acMessage.Drop)
-            pActor->DropOrPickUpObject(acMessage.Item, nullptr, nullptr);
-        else
-            pActor->AddOrRemoveItem(acMessage.Item);
+        pActor->AddOrRemoveItem(acMessage.Item);
 
         return;
     }
