@@ -1225,6 +1225,7 @@ void TP_MAKE_THISCALL(HookUnequipObject, Actor, void* apUnk1, TESBoundObject* ap
     TiltedPhoques::ThisCall(RealUnequipObject, apThis, apUnk1, apObject, aUnk2, apUnk3);
 }
 
+// Returns a float in xmm0, 0 when nothing was played. Callers check it for -1.0 (lip file failed to load).
 TP_THIS_FUNCTION(TSpeakSoundFunction, float, Actor, const char* apName, uint32_t* a3, uint32_t a4, uint32_t a5, uint32_t a6, uint64_t a7, uint64_t a8, uint64_t a9, bool a10, uint64_t a11, bool a12, bool a13, bool a14);
 static TSpeakSoundFunction* RealSpeakSoundFunction = nullptr;
 
@@ -1236,8 +1237,15 @@ float TP_MAKE_THISCALL(HookSpeakSoundFunction, Actor, const char* apName, uint32
 
     // The player having the conversation may not own this NPC. Ambient
     // speech still comes only from the actor's simulation owner.
-    if (apThis->GetExtension()->IsLocal() || MenuTopicManager::IsPlayerDialogueSpeaker(apThis))
-        World::Get().GetRunner().Trigger(DialogueEvent(apThis->formID, apName));
+    const bool cIsPlayerDialogue = MenuTopicManager::IsPlayerDialogueSpeaker(apThis);
+    const bool cShouldSync = apThis->GetExtension()->IsLocal() || cIsPlayerDialogue;
+
+    // Lines from a scene let other clients that play the same scene skip them. Menu dialogue always plays.
+    BGSScene* pScene = cIsPlayerDialogue ? nullptr : apThis->GetCurrentScene();
+    const uint32_t cSceneId = pScene && pScene->isPlaying ? pScene->formID : 0;
+
+    if (cShouldSync)
+        World::Get().GetRunner().Trigger(DialogueEvent(apThis->formID, apName, cSceneId));
 
     return TiltedPhoques::ThisCall(RealSpeakSoundFunction, apThis, apName, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14);
 }
