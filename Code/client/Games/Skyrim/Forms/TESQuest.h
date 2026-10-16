@@ -30,6 +30,8 @@ struct BGSSceneAction
     // What the IsSceneActionComplete condition checks (BGSScene::IsActionComplete, 0x1403A18F0 in 1.6.1170)
     [[nodiscard]] bool IsComplete() const noexcept { return status & 2; }
 
+    void Start() { status |= 1u; }
+
     uint32_t actorId; // 0x08 ALID, quest alias ID
     uint16_t startPhase;
     uint16_t endPhase;
