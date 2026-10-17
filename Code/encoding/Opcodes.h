@@ -64,6 +64,7 @@ enum ClientOpcode : unsigned char
     kTradeCancelRequest,
     kTradeInventorySyncRequest,
     kRequestActionEvents,
+    kSendModMessageRequest,
     kClientOpcodeMax
 };
 
@@ -134,5 +135,6 @@ enum ServerOpcode : unsigned char
     kNotifyTradeCancel,
     kNotifyTradeComplete,
     kNotifyActionEvents,
+    kNotifyModMessage,
     kServerOpcodeMax
 };
