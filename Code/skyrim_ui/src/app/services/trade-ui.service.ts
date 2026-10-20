@@ -3,6 +3,7 @@ import { BehaviorSubject, combineLatest, map, Subscription } from 'rxjs';
 import { TranslocoService } from '@ngneat/transloco';
 import { ClientService, TradeItemPayload, TradeStatePayload } from './client.service';
 import { PlayerListService } from './player-list.service';
+import { PlayerUiService } from './player-ui.service';
 import { PopupNotificationService } from './popup-notification.service';
 import { UiRepository } from '../store/ui.repository';
 import { View } from '../models/view.enum';
@@ -94,6 +95,7 @@ export class TradeUiService implements OnDestroy {
     private readonly popupNotificationService: PopupNotificationService,
     private readonly transloco: TranslocoService,
     private readonly uiRepository: UiRepository,
+    private readonly playerUiService: PlayerUiService,
   ) {
     this.subscriptions.add(clientService.tradeStateChange.subscribe(state => this.applyState(state)));
     this.subscriptions.add(clientService.connectionStateChange.subscribe(connected => {
@@ -101,6 +103,11 @@ export class TradeUiService implements OnDestroy {
     }));
     this.subscriptions.add(clientService.tradeInviteChange.subscribe(invite => {
       this.incoming.add(invite.inviterId);
+      // Filtered by the "Trade invitations" setting: decline without a popup.
+      if (!this.playerUiService.acceptsTradeInvite(invite.inviterId)) {
+        this.respond(invite.inviterId, false);
+        return;
+      }
       this.popupNotificationService.addTradeInvite(this.getDisplayName(invite.inviterId),
         () => this.respond(invite.inviterId, true), () => this.respond(invite.inviterId, false));
     }));
