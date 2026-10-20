@@ -47,8 +47,9 @@ function setup() {
     view: 'players', view$: new BehaviorSubject('players'), getView() { return this.view; },
     openView(view) { this.view = view; this.view$.next(view); },
   };
-  const service = new exported.TradeUiService(client, players, popups, { translate: key => key }, ui);
-  return { client, calls, service, notifications, ui };
+  const playerUi = { tradeInvitesAllowed: true, acceptsTradeInvite() { return this.tradeInvitesAllowed; } };
+  const service = new exported.TradeUiService(client, players, popups, { translate: key => key }, ui, playerUi);
+  return { client, calls, service, notifications, ui, playerUi };
 }
 
 function state() {
@@ -132,6 +133,15 @@ test('disconnect clears outgoing invitations so reconnection can trade', () => {
   fixture.client.connectionStateChange.next(true);
   fixture.service.sendInvite(2);
   assert.equal(fixture.calls.filter(call => call[0] === 'sendTradeInvite').length, 2);
+  fixture.service.ngOnDestroy();
+});
+
+test('invitations filtered by the trade invitation setting are declined without a popup', () => {
+  const fixture = setup();
+  fixture.playerUi.tradeInvitesAllowed = false;
+  fixture.client.tradeInviteChange.next({ inviterId: 2, expiryTick: 1000 });
+  assert.equal(fixture.notifications.length, 0);
+  assert.deepEqual(fixture.calls, [['respondTradeInvite', 2, false]]);
   fixture.service.ngOnDestroy();
 });
 
