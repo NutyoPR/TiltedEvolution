@@ -9,6 +9,7 @@ import { View } from '../models/view.enum';
 import { UiRepository } from '../store/ui.repository';
 import { ClientService } from './client.service';
 import { PopupNotificationService } from './popup-notification.service';
+import { SettingService } from './setting.service';
 
 @Injectable({
   providedIn: 'root',
@@ -42,6 +43,7 @@ export class PlayerListService implements OnDestroy {
     private readonly popupNotificationService: PopupNotificationService,
     private readonly uiRepository: UiRepository,
     private readonly translocoService: TranslocoService,
+    private readonly settingService: SettingService,
   ) {
     this.onDebug();
     this.onConnectionStateChanged();
@@ -149,6 +151,10 @@ export class PlayerListService implements OnDestroy {
     this.partyInviteReceivedSubscription =
       this.clientService.partyInviteReceivedChange.subscribe(
         ({ inviterId, expiresInMs }: PartyInvite) => {
+          if (!this.settingService.settings.partyInvites.getValue()) {
+            return;
+          }
+
           const invitingPlayer = this.getPlayerById(inviterId);
           if (
             !this.isConnect ||

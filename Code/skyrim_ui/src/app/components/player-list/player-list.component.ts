@@ -1,11 +1,15 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { combineLatest, Observable, pluck, ReplaySubject, share } from 'rxjs';
+import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
+import { combineLatest, Observable, ReplaySubject, share } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ClientService } from 'src/app/services/client.service';
 import { TradeUiService } from 'src/app/services/trade-ui.service';
 import { GroupService } from 'src/app/services/group.service';
 import { PlayerListService } from 'src/app/services/player-list.service';
-import { Player } from '../../models/player';
+import {
+  PlayerUiEntry,
+  PlayerUiService,
+} from 'src/app/services/player-ui.service';
 
 @Component({
   selector: 'app-player-list',
@@ -14,9 +18,11 @@ import { Player } from '../../models/player';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PlayerListComponent {
+  readonly faEye = faEye;
+  readonly faEyeSlash = faEyeSlash;
+
   playerList$: Observable<
-    (Player & {
-      isMember: boolean;
+    (PlayerUiEntry & {
       isTrading: boolean;
       tradeBusy: boolean;
       pendingInvite: boolean;
@@ -27,24 +33,20 @@ export class PlayerListComponent {
 
   constructor(
     private readonly playerListService: PlayerListService,
+    private readonly playerUiService: PlayerUiService,
     private readonly clientService: ClientService,
     private readonly groupService: GroupService,
     private readonly tradeUiService: TradeUiService,
   ) {
     this.playerList$ = combineLatest([
-      this.playerListService.playerList.asObservable().pipe(pluck('players')),
-      this.groupService.group.asObservable().pipe(pluck('members')),
+      this.playerUiService.players$,
       this.tradeUiService.session$,
       this.tradeUiService.pendingOutgoing$,
     ]).pipe(
-      map(([players, members, session, pendingOutgoing]) => {
-        if (!players) {
-          return [];
-        }
+      map(([players, session, pendingOutgoing]) => {
         const localId = this.clientService.localPlayerId;
         const activePartnerId =
           session && session.active ? session.partnerId : undefined;
-        const memberList = Array.isArray(members) ? members : [];
         const outgoing = new Set<number>(
           pendingOutgoing ? Array.from(pendingOutgoing) : [],
         );
@@ -53,7 +55,6 @@ export class PlayerListComponent {
           .filter(player => player.id !== localId)
           .map(player => ({
             ...player,
-            isMember: memberList.includes(player.id),
             isTrading: activePartnerId === player.id,
             tradeBusy,
             pendingInvite: outgoing.has(player.id),
@@ -77,6 +78,10 @@ export class PlayerListComponent {
         resetOnRefCountZero: true,
       }),
     );
+  }
+
+  public toggleName(player: PlayerUiEntry) {
+    this.playerUiService.toggleName(player);
   }
 
   public sendPartyInvite(inviteeId: number) {
