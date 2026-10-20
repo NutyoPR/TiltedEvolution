@@ -182,9 +182,10 @@ export class PlayerListService implements OnDestroy {
           invitingPlayer.hasInvitedLocalPlayer = true;
           this.updatePlayerList();
           this.popupNotificationService.addPartyInvite(
-            this.settingService.isNameHidden(invitingPlayer.name)
-              ? this.translocoService.translate('COMPONENT.PARTY_LIST.STRANGER')
-              : invitingPlayer.name,
+            // The inviter can't be in our party yet.
+            this.settingService.isNameRevealed(invitingPlayer.name, false)
+              ? invitingPlayer.name
+              : this.translocoService.translate('COMPONENT.PARTY_LIST.STRANGER'),
             () => {
               // A popup for a replaced invite must not accept the newer one.
               if (this.receivedInvites.get(inviterId) === invitation) {

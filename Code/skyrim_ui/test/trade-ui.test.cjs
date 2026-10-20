@@ -50,7 +50,7 @@ function setup() {
   const playerUi = {
     tradeInvitesAllowed: true, hiddenNames: new Set(),
     acceptsTradeInvite() { return this.tradeInvitesAllowed; },
-    isNameHidden(name) { return this.hiddenNames.has(name); },
+    isNameRevealed(id, name) { return !this.hiddenNames.has(name); },
   };
   const service = new exported.TradeUiService(client, players, popups, { translate: key => key }, ui, playerUi);
   return { client, calls, service, notifications, ui, playerUi };

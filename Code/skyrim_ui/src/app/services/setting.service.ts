@@ -159,9 +159,10 @@ export class SettingService {
       this.screenCornerValues,
       ScreenCorner.TOP_LEFT,
     ),
-    strangerNames: new ToggleSetting(
+    // On: players outside your party show as "Stranger", invites included.
+    hideStrangerNames: new ToggleSetting(
       this.storeService,
-      'playerUi_strangerNames',
+      'playerUi_hideStrangerNames',
       false,
     ),
     partyInvites: new ToggleSetting(
@@ -245,9 +246,15 @@ export class SettingService {
     );
   }
 
-  /** Whether this name was hidden with the eye in the player list. */
-  public isNameHidden(name: string): boolean {
-    return this.nameOverrides.getValue()[name] === false;
+  /**
+   * Whether a player's real name may be shown: the eye in the player list
+   * wins, then party members show, then the global stranger setting.
+   */
+  public isNameRevealed(name: string, isPartyMember: boolean): boolean {
+    return (
+      this.nameOverrides.getValue()[name] ??
+      (isPartyMember || !this.settings.hideStrangerNames.getValue())
+    );
   }
 
   public setNameOverride(name: string, revealed: boolean) {

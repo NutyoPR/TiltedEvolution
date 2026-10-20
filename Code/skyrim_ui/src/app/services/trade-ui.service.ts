@@ -198,8 +198,8 @@ export class TradeUiService implements OnDestroy {
   public getDisplayName(id: number): string {
     const name = this.playerListService.playerList.value?.players.find(player => player.id === id)?.name;
     if (name === undefined) return this.transloco.translate('SERVICE.TRADE.UNKNOWN_PLAYER', { id });
-    // A name hidden with the eye stays hidden, invites and trades included.
-    return this.playerUiService.isNameHidden(name) ? this.transloco.translate('COMPONENT.PARTY_LIST.STRANGER') : name;
+    // Trade toasts and the trade window follow the same name rule as the player list.
+    return this.playerUiService.isNameRevealed(id, name) ? name : this.transloco.translate('COMPONENT.PARTY_LIST.STRANGER');
   }
 
   private removeOutgoing(id: number): void {

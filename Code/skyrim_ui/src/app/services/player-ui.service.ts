@@ -52,10 +52,10 @@ export class PlayerUiService implements OnDestroy {
     this.players$ = combineLatest([
       this.playerListService.playerList,
       this.groupService.group,
-      this.settings.strangerNames,
+      this.settings.hideStrangerNames,
       this.settingService.nameOverrides,
     ]).pipe(
-      map(([playerList, group, strangerNames, overrides]) => {
+      map(([playerList, group]) => {
         const members = group?.members ?? [];
         return (playerList?.players ?? []).map(player => {
           const isMember = members.includes(player.id);
@@ -64,8 +64,10 @@ export class PlayerUiService implements OnDestroy {
             isMember,
             // The eye wins over both defaults, so party members can be
             // hidden too.
-            isNameRevealed:
-              overrides[player.name] ?? (isMember || strangerNames),
+            isNameRevealed: this.settingService.isNameRevealed(
+              player.name,
+              isMember,
+            ),
           };
         });
       }),
@@ -97,8 +99,9 @@ export class PlayerUiService implements OnDestroy {
     this.settingService.setNameOverride(player.name, !player.isNameRevealed);
   }
 
-  public isNameHidden(name: string): boolean {
-    return this.settingService.isNameHidden(name);
+  /** Same rule as the player list: eye, then party membership, then the global setting. */
+  public isNameRevealed(playerId: number, name: string): boolean {
+    return this.settingService.isNameRevealed(name, this.isPartyMember(playerId));
   }
 
   public acceptsPartyInvites(): boolean {
