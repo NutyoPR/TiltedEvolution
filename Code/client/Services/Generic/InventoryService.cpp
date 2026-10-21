@@ -155,9 +155,9 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
             // The spawn request's inventory replaces the actor's once its 3D loads, so the change has to go there too
             if (auto* pWaitingFor3D = m_world.try_get<WaitingFor3D>(*remoteEntity))
             {
+                // Drops arrive as plain removals here; DroppedItemService places the dropped reference.
                 pWaitingFor3D->SpawnRequest.InventoryContent.AddOrRemoveEntry(acMessage.Item);
-                if (!acMessage.Drop)
-                    return;
+                return;
             }
 
             if (const auto* pFormIdComponent = m_world.try_get<FormIdComponent>(*remoteEntity))
