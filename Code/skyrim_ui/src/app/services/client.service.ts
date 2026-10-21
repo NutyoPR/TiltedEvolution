@@ -19,6 +19,8 @@ export interface TradeItemPayload {
   isQuestItem: boolean;
   isEquipped?: boolean;
   isUnsupportedTemporary?: boolean;
+  /** Non-playable or nameless (skins, transformation gear, dummies). */
+  isUntradable?: boolean;
   name: string;
   customNames?: string[];
   inventoryIndex?: number;
@@ -891,6 +893,7 @@ export class ClientService implements OnDestroy {
       isQuestItem,
       isEquipped: Boolean(payload?.isEquipped),
       isUnsupportedTemporary: Boolean(payload?.isUnsupportedTemporary),
+      isUntradable: Boolean(payload?.isUntradable),
       name,
     };
 
