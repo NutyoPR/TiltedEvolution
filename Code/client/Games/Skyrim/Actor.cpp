@@ -62,17 +62,10 @@
 
 namespace
 {
-void QueueActorInventoryChange(Actor* apActor, InventoryChangeEvent aEvent, TESObjectREFR* apTransferReference = nullptr)
+// AI updates run on job threads, so ownership is resolved when the runner hands the event to the main thread
+void QueueActorInventoryChange(InventoryChangeEvent aEvent, TESObjectREFR* apTransferReference = nullptr)
 {
-    auto ownershipToken = Utils::GetLocalOwnershipToken(apActor->formID);
-    if (!ownershipToken && apTransferReference == PlayerCharacter::Get())
-        ownershipToken = Utils::GetRemoteOwnershipToken(apActor->formID);
-
-    if (!ownershipToken)
-        return;
-
-    aEvent.ServerId = ownershipToken->ServerId;
-    aEvent.OwnershipEpoch = ownershipToken->OwnershipEpoch;
+    aEvent.IsPlayerTransfer = apTransferReference && apTransferReference == PlayerCharacter::Get();
     World::Get().GetRunner().Trigger(std::move(aEvent));
 }
 }
@@ -1117,7 +1110,7 @@ void TP_MAKE_THISCALL(HookAddInventoryItem, Actor, TESBoundObject* apItem, Extra
         if (apExtraData)
             apThis->GetItemFromExtraData(item, apExtraData);
 
-        QueueActorInventoryChange(apThis, InventoryChangeEvent(apThis->formID, std::move(item)), apOldOwner);
+        QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item)), apOldOwner);
     }
 
     TiltedPhoques::ThisCall(RealAddInventoryItem, apThis, apItem, apExtraData, aCount, apOldOwner);
@@ -1141,7 +1134,7 @@ void* TP_MAKE_THISCALL(HookPickUpObject, Actor, TESObjectREFR* apObject, int32_t
         // The inventory change event should always be sent to the server, otherwise the server inventory won't be updated.
         bool shouldUpdateClients = apObject->IsTemporary() && !ScopedActivateOverride::IsOverriden();
 
-        QueueActorInventoryChange(apThis, InventoryChangeEvent(apThis->formID, std::move(item), shouldUpdateClients));
+        QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, std::move(item), shouldUpdateClients));
     }
 
     // A dropped item may be server-tracked; the other clients need to delete their copy.
@@ -1172,7 +1165,7 @@ void* TP_MAKE_THISCALL(HookDropObject, Actor, void* apResult, TESBoundObject* ap
     item.Count = -aCount;
 
     // Other clients only remove the item from the inventory; DroppedItemService syncs the placed reference.
-    QueueActorInventoryChange(apThis, InventoryChangeEvent(apThis->formID, item));
+    QueueActorInventoryChange(InventoryChangeEvent(apThis->formID, item));
 
     void* pResult = nullptr;
     {
