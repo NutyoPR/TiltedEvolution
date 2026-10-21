@@ -777,6 +777,28 @@ TEST_CASE("Mod message channel names", "[encoding.mod_message]")
     REQUIRE_FALSE(ModMessage::IsValidChannelName(String("nul\0", 4)));
 }
 
+TEST_CASE("Chat broadcast", "[encoding.chat]")
+{
+    NotifyChatMessageBroadcast sendMessage;
+    sendMessage.MessageType = kPartyChat;
+    sendMessage.PlayerId = 0x1234567;
+    sendMessage.PlayerName = "absol";
+    sendMessage.ChatMessage = "Follow me";
+
+    Buffer buff(1000);
+    Buffer::Writer writer(&buff);
+    sendMessage.Serialize(writer);
+
+    Buffer::Reader reader(&buff);
+
+    const ServerMessageFactory factory;
+    auto pMessage = factory.Extract(reader);
+
+    REQUIRE(pMessage);
+    REQUIRE(pMessage->GetOpcode() == sendMessage.GetOpcode());
+    REQUIRE(*CastUnique<NotifyChatMessageBroadcast>(std::move(pMessage)) == sendMessage);
+}
+
 TEST_CASE("StringCache", "[encoding.string_cache]")
 {
     SECTION("Messages")

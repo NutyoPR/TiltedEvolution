@@ -560,6 +560,8 @@ interface SkyrimTogether {
 interface NameTagSettings {
   nameTags: number;
   backdrop: number;
+  /** Floating subtitle chat filter. */
+  floatingChat: number;
   /** Font size in pixels. */
   fontSize: number;
   nameFadeStart: number;
@@ -570,4 +572,6 @@ interface NameTagSettings {
   strangerLabel: string;
   /** Players whose real name may be shown. */
   revealedPlayerIds: number[];
+  /** Players whose name may be shown in front of their floating chat. */
+  revealedChatPlayerIds: number[];
 }
