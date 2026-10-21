@@ -1,10 +1,10 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Inject, Injectable, OnDestroy, Optional } from '@angular/core';
 import { BehaviorSubject, combineLatest, map, Subscription } from 'rxjs';
 import { TranslocoService } from '@ngneat/transloco';
 import { ClientService, TradeItemPayload, TradeStatePayload } from './client.service';
 import { PlayerListService } from './player-list.service';
-import { PlayerUiService } from './player-ui.service';
 import { PopupNotificationService } from './popup-notification.service';
+import { TRADE_INVITE_POLICY, TradeInvitePolicy } from './trade-invite-policy';
 import { UiRepository } from '../store/ui.repository';
 import { View } from '../models/view.enum';
 import { matchesTradeCategory, normalizeTradeCategory, tradeCategories, TradeCategory, TradeItemCategory } from '../models/trade-category';
@@ -88,7 +88,7 @@ export class TradeUiService implements OnDestroy {
   private state?: TradeStatePayload;
   private previousView: View | null = null;
   private readonly incoming = new Set<number>();
-  // Invites declined by the "Trade invitations" filter; the server echoes the decline back to us.
+  // Invites declined by the invite policy; the server echoes the decline back to us.
   private readonly silentlyDeclined = new Set<number>();
 
   constructor(
@@ -97,7 +97,7 @@ export class TradeUiService implements OnDestroy {
     private readonly popupNotificationService: PopupNotificationService,
     private readonly transloco: TranslocoService,
     private readonly uiRepository: UiRepository,
-    private readonly playerUiService: PlayerUiService,
+    @Optional() @Inject(TRADE_INVITE_POLICY) private readonly invitePolicy?: TradeInvitePolicy,
   ) {
     this.subscriptions.add(clientService.tradeStateChange.subscribe(state => this.applyState(state)));
     this.subscriptions.add(clientService.connectionStateChange.subscribe(connected => {
@@ -105,8 +105,7 @@ export class TradeUiService implements OnDestroy {
     }));
     this.subscriptions.add(clientService.tradeInviteChange.subscribe(invite => {
       this.incoming.add(invite.inviterId);
-      // Filtered by the "Trade invitations" setting: decline without a popup.
-      if (!this.playerUiService.acceptsTradeInvite(invite.inviterId)) {
+      if (this.invitePolicy && !this.invitePolicy.acceptsTradeInvite(invite.inviterId)) {
         this.silentlyDeclined.add(invite.inviterId);
         this.respond(invite.inviterId, false);
         return;
@@ -198,8 +197,7 @@ export class TradeUiService implements OnDestroy {
   public getDisplayName(id: number): string {
     const name = this.playerListService.playerList.value?.players.find(player => player.id === id)?.name;
     if (name === undefined) return this.transloco.translate('SERVICE.TRADE.UNKNOWN_PLAYER', { id });
-    // Trade toasts and the trade window follow the same name rule as the player list.
-    return this.playerUiService.isNameRevealed(id, name) ? name : this.transloco.translate('COMPONENT.PARTY_LIST.STRANGER');
+    return this.invitePolicy ? this.invitePolicy.displayName(id, name) : name;
   }
 
   private removeOutgoing(id: number): void {

@@ -103,7 +103,7 @@
           (ngModelChange)="settings.partyInvites.next($event)"
         />
       </div>
-      <div class="setting">
+      <div class="setting" *ngIf="hasTrading">
         <label for="tradeInvites"
           >{{ 'COMPONENT.SETTINGS.PLAYER_UI.TRADE_INVITES' | transloco }}
           <small class="hint">{{
