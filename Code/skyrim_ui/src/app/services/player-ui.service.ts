@@ -105,6 +105,26 @@ export class PlayerUiService implements OnDestroy {
     return this.settings.partyInvites.getValue();
   }
 
+  /**
+   * Chat sender name after the known chat names setting; the eye in the
+   * player list overrides it per name. Call it when the message arrives, so a
+   * sender who leaves later stays hidden.
+   */
+  public chatSenderName(name: string): string {
+    const players = this.playerListService.playerList.getValue()?.players;
+    const sender = players?.find(player => player.name === name);
+    // The local player isn't in their own player list, so that's who an
+    // unknown sender is. Known risk: a player whose list entry hasn't arrived
+    // yet (just joined) is shown by name too.
+    if (!sender) {
+      return name;
+    }
+
+    return this.isChatNameKnown(name, this.isPartyMember(sender.id))
+      ? name
+      : this.translocoService.translate('COMPONENT.PARTY_LIST.STRANGER');
+  }
+
   /** Whether a chat message may show in the in-game preview (F2 closed). */
   public showsInMiniChat(message: ChatMessage): boolean {
     const filter = this.settings.miniChat.getValue();
@@ -127,6 +147,28 @@ export class PlayerUiService implements OnDestroy {
     );
   }
 
+  private isChatNameKnown(
+    name: string,
+    isPartyMember: boolean,
+    knownChatNames = this.settings.knownChatNames.getValue(),
+  ): boolean {
+    return (
+      this.settingService.nameOverrides.getValue()[name] ??
+      this.matchesFilter(knownChatNames, isPartyMember)
+    );
+  }
+
+  private isPartyMember(playerId: number): boolean {
+    return !!this.groupService.group.getValue()?.members.includes(playerId);
+  }
+
+  private matchesFilter(filter: PlayerUiFilter, isMember: boolean): boolean {
+    return (
+      filter === PlayerUiFilter.ON ||
+      (filter === PlayerUiFilter.PARTY && isMember)
+    );
+  }
+
   private onNameTagSettingsChanged() {
     const filterIndex = (filter: PlayerUiFilter) =>
       Object.values(PlayerUiFilter).indexOf(filter);
@@ -135,6 +177,8 @@ export class PlayerUiService implements OnDestroy {
       this.players$,
       this.settings.nameTags,
       this.settings.nameBackdrop,
+      this.settings.floatingChat,
+      this.settings.knownChatNames,
       this.settings.nameTagSize,
       this.settings.nameFadeStart,
       this.settings.nameInvisible,
@@ -148,6 +192,8 @@ export class PlayerUiService implements OnDestroy {
           players,
           nameTags,
           backdrop,
+          floatingChat,
+          knownChatNames,
           size,
           nameFadeStart,
           nameInvisible,
@@ -157,6 +203,7 @@ export class PlayerUiService implements OnDestroy {
         ]) => ({
           nameTags: filterIndex(nameTags),
           backdrop: filterIndex(backdrop),
+          floatingChat: filterIndex(floatingChat),
           fontSize: fontSizeToPixels[size],
           nameFadeStart: Number(nameFadeStart),
           nameInvisible: Number(nameInvisible),
@@ -168,12 +215,23 @@ export class PlayerUiService implements OnDestroy {
             .filter(player => player.isNameRevealed)
             .map(player => player.id)
             .sort((a, b) => a - b),
+          revealedChatPlayerIds: players
+            .filter(player =>
+              this.isChatNameKnown(
+                player.name,
+                player.isMember,
+                knownChatNames,
+              ),
+            )
+            .map(player => player.id)
+            .sort((a, b) => a - b),
         }),
       ),
       distinctUntilChanged(
         (previous, current) =>
           previous.nameTags === current.nameTags &&
           previous.backdrop === current.backdrop &&
+          previous.floatingChat === current.floatingChat &&
           previous.fontSize === current.fontSize &&
           previous.nameFadeStart === current.nameFadeStart &&
           previous.nameInvisible === current.nameInvisible &&
@@ -183,6 +241,11 @@ export class PlayerUiService implements OnDestroy {
           previous.revealedPlayerIds.length === current.revealedPlayerIds.length &&
           previous.revealedPlayerIds.every(
             (id, index) => id === current.revealedPlayerIds[index],
+          ) &&
+          previous.revealedChatPlayerIds.length ===
+            current.revealedChatPlayerIds.length &&
+          previous.revealedChatPlayerIds.every(
+            (id, index) => id === current.revealedChatPlayerIds[index],
           ),
       ),
     ).subscribe(settings => this.clientService.setNameTagSettings(settings));
