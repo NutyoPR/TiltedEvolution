@@ -5,7 +5,7 @@ using TiltedPhoques::Serialization;
 
 bool ServerSettings::operator==(const ServerSettings& acRhs) const noexcept
 {
-    return Difficulty == acRhs.Difficulty && GreetingsEnabled == acRhs.GreetingsEnabled && PvpEnabled == acRhs.PvpEnabled && SyncPlayerHomes == acRhs.SyncPlayerHomes && DeathSystemEnabled == acRhs.DeathSystemEnabled && AutoPartyJoin == acRhs.AutoPartyJoin && ItemDropsEnabled == acRhs.ItemDropsEnabled && ConsoleCommandsAllowed == acRhs.ConsoleCommandsAllowed;
+    return Difficulty == acRhs.Difficulty && GreetingsEnabled == acRhs.GreetingsEnabled && PvpEnabled == acRhs.PvpEnabled && SyncPlayerHomes == acRhs.SyncPlayerHomes && DeathSystemEnabled == acRhs.DeathSystemEnabled && AutoPartyJoin == acRhs.AutoPartyJoin && ItemDropsEnabled == acRhs.ItemDropsEnabled && ConsoleCommandsAllowed == acRhs.ConsoleCommandsAllowed && VoipEnabled == acRhs.VoipEnabled;
 }
 
 bool ServerSettings::operator!=(const ServerSettings& acRhs) const noexcept
@@ -24,6 +24,7 @@ void ServerSettings::Serialize(TiltedPhoques::Buffer::Writer& aWriter) const noe
     Serialization::WriteBool(aWriter, AutoPartyJoin);
     Serialization::WriteBool(aWriter, ItemDropsEnabled);
     Serialization::WriteBool(aWriter, ConsoleCommandsAllowed);
+    Serialization::WriteBool(aWriter, VoipEnabled);
 }
 
 void ServerSettings::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcept
@@ -37,4 +38,5 @@ void ServerSettings::Deserialize(TiltedPhoques::Buffer::Reader& aReader) noexcep
     AutoPartyJoin = Serialization::ReadBool(aReader);
     ItemDropsEnabled = Serialization::ReadBool(aReader);
     ConsoleCommandsAllowed = Serialization::ReadBool(aReader);
+    VoipEnabled = Serialization::ReadBool(aReader);
 }

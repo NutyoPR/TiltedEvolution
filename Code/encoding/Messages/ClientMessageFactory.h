@@ -67,6 +67,8 @@
 #include <Messages/DropItemRequest.h>
 #include <Messages/DroppedItemMoveRequest.h>
 #include <Messages/PickUpDroppedItemRequest.h>
+#include <Messages/VoiceDataRequest.h>
+#include <Messages/VoiceStateRequest.h>
 
 using TiltedPhoques::UniquePtr;
 
@@ -80,7 +82,7 @@ struct ClientMessageFactory
             AuthenticationRequest, AssignCharacterRequest, ClientReferencesMoveRequest, EnterInteriorCellRequest, RequestInventoryChanges, RequestInventorySnapshot, RequestFactionsChanges, RequestQuestUpdate, PartyInviteRequest, PartyAcceptInviteRequest, PartyLeaveRequest, PartyCreateRequest, PartyChangeLeaderRequest, PartyKickRequest, TradeInviteRequest, TradeInviteResponseRequest, TradeOfferUpdateRequest, TradeSetReadyRequest, TradeCancelRequest, TradeInventorySyncRequest, RequestActorValueChanges, RequestActorMaxValueChanges, EnterExteriorCellRequest, RequestHealthChangeBroadcast, ActivateRequest, LockChangeRequest, AssignObjectsRequest, RequestDeathStateChange, ShiftGridCellRequest,
             RequestOwnershipTransfer, RequestOwnershipClaim, RequestObjectInventoryChanges, SpellCastRequest, ProjectileLaunchRequest, InterruptCastRequest, AddTargetRequest, ScriptAnimationRequest, DrawWeaponRequest, MountRequest, NewPackageRequest, RequestRespawn, SyncExperienceRequest,
             RequestEquipmentChanges, SendChatMessageRequest, TeleportCommandRequest, PlayerRespawnRequest, DialogueRequest, SubtitleRequest, PlayerDialogueRequest, PlayerLevelRequest, TeleportRequest, RequestPlayerHealthUpdate, RequestWeatherChange, RequestCurrentWeather, RequestSetWaypoint,
-            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestTimeSkip, DropItemRequest, DroppedItemMoveRequest, PickUpDroppedItemRequest>;
+            RequestRemoveWaypoint, RemoveSpellRequest, SetTimeCommandRequest, RequestActionEvents, RequestTimeSkip, DropItemRequest, DroppedItemMoveRequest, PickUpDroppedItemRequest, VoiceDataRequest, VoiceStateRequest>;
 
         return s_visitor(std::forward<T>(func));
     }
