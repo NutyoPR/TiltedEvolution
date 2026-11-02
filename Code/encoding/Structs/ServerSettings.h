@@ -18,4 +18,5 @@ struct ServerSettings
     bool SyncPlayerCalendar{};
     bool AutoPartyJoin{};
     bool ItemDropsEnabled{};
+    bool ConsoleCommandsAllowed{true};
 };
