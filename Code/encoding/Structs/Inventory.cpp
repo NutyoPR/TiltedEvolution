@@ -240,3 +240,8 @@ bool Inventory::ContainsQuestItems() const noexcept
     }
     return false;
 }
+
+bool Inventory::HasWornItems() const noexcept
+{
+    return std::any_of(std::begin(Entries), std::end(Entries), [](const Entry& acEntry) { return acEntry.IsWorn(); });
+}

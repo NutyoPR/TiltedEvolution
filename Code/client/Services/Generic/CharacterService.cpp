@@ -474,7 +474,11 @@ void CharacterService::OnAssignCharacter(const AssignCharacterResponse& acMessag
         // The hooks can't send inventory changes without a LocalComponent, so anything that changed while the request was
         // in flight (e.g. the outfit being equipped as the actor loads) is missing on the server. Send the whole inventory.
         const Inventory currentInventory = pActor->GetActorInventory();
-        if (currentInventory.Entries != acMessage.CurrentInventory.Entries || currentInventory.CurrentMagicEquipment != acMessage.CurrentInventory.CurrentMagicEquipment)
+        // Still undressed while its 3D loads: the outfit equip is sent incrementally once it happens.
+        const bool cIsLoadingUndressed = !acMessage.IsDead && !pActor->GetExtension()->IsPlayer() && !currentInventory.HasWornItems() && acMessage.CurrentInventory.HasWornItems();
+        if (cIsLoadingUndressed)
+            spdlog::info("Not sending the inventory of local actor {:X}, it has no worn items yet", pActor->formID);
+        else if (currentInventory.Entries != acMessage.CurrentInventory.Entries || currentInventory.CurrentMagicEquipment != acMessage.CurrentInventory.CurrentMagicEquipment)
         {
             spdlog::info("Inventory of local actor {:X} changed while its assignment was in flight, sending it to the server", pActor->formID);
 

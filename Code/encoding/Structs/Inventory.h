@@ -118,6 +118,7 @@ struct Inventory
     void AddOrRemoveEntry(const Entry& acEntry) noexcept;
     void UpdateEquipment(const Inventory& acNewInventory) noexcept;
     bool ContainsQuestItems() const noexcept;
+    bool HasWornItems() const noexcept;
 
     Vector<Entry> Entries{};
     MagicEquipment CurrentMagicEquipment{};

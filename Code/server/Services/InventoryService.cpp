@@ -113,7 +113,21 @@ void InventoryService::OnInventorySnapshot(const PacketEvent<RequestInventorySna
         return;
     }
 
-    view.get<InventoryComponent>(*it).Content = message.CurrentInventory;
+    auto& content = view.get<InventoryComponent>(*it).Content;
+
+    // An NPC is briefly undressed while its 3D loads. A snapshot taken then would strip it for everyone, and a
+    // living NPC never legitimately loses every worn item at once (looting and pickpocketing are incremental).
+    if (!message.CurrentInventory.HasWornItems() && content.HasWornItems())
+    {
+        const auto* pCharacterComponent = m_world.try_get<CharacterComponent>(*it);
+        if (pCharacterComponent && !pCharacterComponent->IsPlayer() && !pCharacterComponent->IsDead())
+        {
+            spdlog::info("Ignored an inventory snapshot without worn items for living actor {:X}", message.ServerId);
+            return;
+        }
+    }
+
+    content = message.CurrentInventory;
 
     NotifyInventorySnapshot notify;
     notify.ServerId = message.ServerId;

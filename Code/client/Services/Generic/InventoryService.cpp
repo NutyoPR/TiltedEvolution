@@ -317,6 +317,12 @@ void InventoryService::ApplyRemoteInventory(World& aWorld, const entt::entity aE
         return;
 
     const Inventory currentInventory = pActor->GetActorInventory();
+    if (!acInventory.HasWornItems() && currentInventory.HasWornItems() && !pActor->IsDead() && !pActor->GetExtension()->IsPlayer())
+    {
+        spdlog::info("Ignored an inventory without worn items for living actor {:X}", pActor->formID);
+        return;
+    }
+
     if (currentInventory.Entries != acInventory.Entries || currentInventory.CurrentMagicEquipment != acInventory.CurrentMagicEquipment)
         pActor->SetActorInventory(acInventory);
 }
