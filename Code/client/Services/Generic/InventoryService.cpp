@@ -159,6 +159,13 @@ void InventoryService::OnNotifyInventoryChanges(const NotifyInventoryChanges& ac
                 return;
             }
 
+            // The actor's process isn't loaded yet; the change is applied after its deferred inventory
+            if (auto* pPending = m_world.try_get<PendingInventoryComponent>(*remoteEntity); pPending && pPending->OwnershipEpoch == acMessage.OwnershipEpoch)
+            {
+                pPending->Updates.emplace_back(acMessage);
+                return;
+            }
+
             if (const auto* pFormIdComponent = m_world.try_get<FormIdComponent>(*remoteEntity))
                 pActor = Cast<Actor>(TESForm::GetById(pFormIdComponent->Id));
         }
@@ -202,6 +209,12 @@ void InventoryService::OnNotifyEquipmentChanges(const NotifyEquipmentChanges& ac
     if (auto* pWaitingFor3D = m_world.try_get<WaitingFor3D>(*entity))
     {
         pWaitingFor3D->PendingEquipmentChanges.push_back(acMessage);
+        return;
+    }
+
+    if (auto* pPending = m_world.try_get<PendingInventoryComponent>(*entity); pPending && pPending->OwnershipEpoch == acMessage.OwnershipEpoch)
+    {
+        pPending->Updates.emplace_back(acMessage);
         return;
     }
 
