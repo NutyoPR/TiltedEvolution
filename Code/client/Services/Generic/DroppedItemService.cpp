@@ -19,6 +19,7 @@
 #include <Forms/TESObjectCELL.h>
 #include <Forms/TESWorldSpace.h>
 #include <Forms/TESBoundObject.h>
+#include <Forms/AlchemyItem.h>
 
 namespace
 {
@@ -370,7 +371,12 @@ TESObjectREFR* DroppedItemService::SpawnItem(const DroppedItemData& acData) cons
 {
     auto& modSystem = m_world.GetModSystem();
 
-    auto* pBaseForm = Cast<TESBoundObject>(TESForm::GetById(modSystem.GetGameId(acData.Item.BaseId)));
+    TESBoundObject* pBaseForm = nullptr;
+    // A player-crafted potion or poison only has a temporary form id, so recreate it from the dropper's recipe.
+    if (!acData.Item.Potion.Effects.empty())
+        pBaseForm = AlchemyItem::Create(acData.Item.Potion);
+    else
+        pBaseForm = Cast<TESBoundObject>(TESForm::GetById(modSystem.GetGameId(acData.Item.BaseId)));
     if (!pBaseForm)
         return nullptr;
 
