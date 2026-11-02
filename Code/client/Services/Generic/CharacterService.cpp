@@ -12,6 +12,7 @@
 #include <Games/Misc/SubtitleManager.h>
 
 #include <Forms/TESNPC.h>
+#include <Forms/ActorValueInfo.h>
 #include <Interface/UI.h>
 #include <Forms/TESQuest.h>
 
@@ -74,6 +75,16 @@
 
 namespace
 {
+ActorValues ValuesUntilKilled(const ActorValues& acValues) noexcept
+{
+    // Zero health can kill a newly loaded copy before its body is ready to fall.
+    // Only use this for a living NPC that will be killed after loading its 3D.
+    ActorValues values = acValues;
+    if (auto it = values.ActorValuesList.find(ActorValueInfo::kHealth); it != values.ActorValuesList.end() && it->second <= 0.f)
+        it.value() = 1.f;
+    return values;
+}
+
 bool CanApplyInventory(Actor* apActor) noexcept
 {
     return apActor && apActor->currentProcess && apActor->currentProcess->middleProcess && apActor->GetNiNode();
@@ -162,7 +173,9 @@ void CharacterService::ReconcileActorData(
     if (!apActor)
         return;
 
-    apActor->SetActorValues(acActorData.InitialActorValues);
+    apActor->SetActorValues(acActorData.IsDead && !apActor->GetExtension()->IsPlayer() && !apActor->IsDead()
+                               ? ValuesUntilKilled(acActorData.InitialActorValues)
+                               : acActorData.InitialActorValues);
 
     if (aApplyInventory && CanApplyInventory(apActor))
     {
@@ -175,8 +188,12 @@ void CharacterService::ReconcileActorData(
     {
         if (acActorData.IsDead)
         {
-            spdlog::info("Killing actor {:X} to match server state, local owner: {}", apActor->formID, aIsLocalOwner);
-            apActor->Kill();
+            // Remote spawns finish their death transition in the WaitingFor3D step.
+            if (aIsLocalOwner || !m_world.any_of<WaitingFor3D>(aEntity))
+            {
+                spdlog::info("Killing actor {:X} to match server state, local owner: {}", apActor->formID, aIsLocalOwner);
+                apActor->Kill();
+            }
         }
         // Respawn resets the reference, which re-rolls leveled actors and reloads their 3D. The owner would
         // rediscover it as a new actor, so keep the local death and let the death state sync report it.
@@ -672,7 +689,9 @@ void CharacterService::OnCharacterSpawn(const CharacterSpawnRequest& acMessage) 
     pActor->rotation.x = acMessage.Rotation.x;
     pActor->rotation.z = acMessage.Rotation.y;
     pActor->MoveTo(PlayerCharacter::Get()->parentCell, acMessage.Position);
-    pActor->SetActorValues(acMessage.InitialActorValues);
+    pActor->SetActorValues(acMessage.IsDead && !acMessage.IsPlayer && !pActor->IsDead()
+                              ? ValuesUntilKilled(acMessage.InitialActorValues)
+                              : acMessage.InitialActorValues);
 
     pActor->GetExtension()->SetPlayer(acMessage.IsPlayer);
     if (acMessage.IsPlayer)
@@ -682,7 +701,8 @@ void CharacterService::OnCharacterSpawn(const CharacterSpawnRequest& acMessage) 
         m_world.emplace_or_replace<PlayerComponent>(*entity, acMessage.PlayerId);
     }
 
-    if (pActor->IsDead() != acMessage.IsDead)
+    // Let WaitingFor3D kill a new corpse once its loaded body can fall.
+    if (pActor->IsDead() != acMessage.IsDead && (!acMessage.IsDead || CanApplyInventory(pActor)))
         acMessage.IsDead ? pActor->Kill() : pActor->Respawn();
 
     spdlog::info("Spawn Request Is summon {}", acMessage.IsPlayerSummon);
@@ -1710,7 +1730,9 @@ Actor* CharacterService::CreateCharacterForEntity(entt::entity aEntity) const no
     pActor->rotation.x = acMessage.Rotation.x;
     pActor->rotation.z = acMessage.Rotation.y;
     pActor->MoveTo(PlayerCharacter::Get()->parentCell, pInterpolationComponent->Position);
-    pActor->SetActorValues(acMessage.InitialActorValues);
+    pActor->SetActorValues(acMessage.IsDead && !acMessage.IsPlayer && !pActor->IsDead()
+                              ? ValuesUntilKilled(acMessage.InitialActorValues)
+                              : acMessage.InitialActorValues);
 
     pActor->GetExtension()->SetPlayer(acMessage.IsPlayer);
     if (acMessage.IsPlayer)
@@ -1720,7 +1742,8 @@ Actor* CharacterService::CreateCharacterForEntity(entt::entity aEntity) const no
         m_world.emplace_or_replace<PlayerComponent>(aEntity, acMessage.PlayerId);
     }
 
-    if (pActor->IsDead() != acMessage.IsDead)
+    // Recreated copies use the same WaitingFor3D death transition as new spawns.
+    if (pActor->IsDead() != acMessage.IsDead && (!acMessage.IsDead || CanApplyInventory(pActor)))
         acMessage.IsDead ? pActor->Kill() : pActor->Respawn();
 
     spdlog::info("Spawned character for entity, server id: {:X}", remoteComponent.Id);
