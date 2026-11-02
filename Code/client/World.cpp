@@ -24,6 +24,7 @@
 #include <Services/MapService.h>
 #include <Services/NameTagService.h>
 #include <Services/DroppedItemService.h>
+#include <Services/VoiceService.h>
 
 #include <Events/PreUpdateEvent.h>
 #include <Events/UpdateEvent.h>
@@ -60,6 +61,7 @@ World::World()
     ctx().emplace<MapService>(*this, m_dispatcher, m_transport);
     ctx().emplace<NameTagService>(*this, m_dispatcher);
     ctx().emplace<DroppedItemService>(*this, m_dispatcher, m_transport);
+    ctx().emplace<VoiceService>(*this, m_dispatcher, m_transport);
 
     BehaviorVar::Get()->Init();
 }

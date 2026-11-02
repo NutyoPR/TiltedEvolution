@@ -32,6 +32,7 @@ private:
     void ProcessToggleDebugUI();
     void ProcessOpenPlayGuide();
     void ProcessSetNameTagSettings(CefRefPtr<CefListValue> aEventArgs);
+    void ProcessSetVoiceSettings(CefRefPtr<CefListValue> aEventArgs);
     void SetUIVisible(bool aVisible) noexcept;
 
     TransportService& m_transport;
