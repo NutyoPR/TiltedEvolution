@@ -15,6 +15,7 @@
 
 #include <Messages/ClientMessageFactory.h>
 #include <Messages/ServerMessageFactory.h>
+#include <Messages/ModMessage.h>
 #include <Structs/Vector2_NetQuantize.h>
 
 #include <TiltedCore/Math.hpp>
@@ -829,6 +830,78 @@ TEST_CASE("Chat broadcast", "[encoding.chat]")
     REQUIRE(*CastUnique<NotifyChatMessageBroadcast>(std::move(pMessage)) == sendMessage);
 }
 
+TEST_CASE("Mod messages", "[encoding.mod_message]")
+{
+    String maxPayload(SkyrimTogetherAPI::kMaxMessageSize, 'p');
+    maxPayload[10] = '\0'; // payloads are opaque bytes, not text
+
+    // Empty payload, 256-byte payload, 64-byte channel name
+    const auto [channel, payload] = GENERATE_COPY(std::make_pair(String("a"), String()), std::make_pair(String("campfire"), maxPayload), std::make_pair(String(SkyrimTogetherAPI::kMaxChannelNameSize, 'c'), String("hi")));
+
+    SECTION("SendModMessageRequest")
+    {
+        SendModMessageRequest sendMessage;
+        sendMessage.Scope = GENERATE(SkyrimTogetherAPI::ChannelScope::Party, SkyrimTogetherAPI::ChannelScope::Nearby);
+        sendMessage.Channel = channel;
+        sendMessage.TargetPlayerId = 7;
+        sendMessage.Data = payload;
+
+        Buffer buff(1000);
+        Buffer::Writer writer(&buff);
+        sendMessage.Serialize(writer);
+
+        Buffer::Reader reader(&buff);
+        auto pMessage = ClientMessageFactory{}.Extract(reader);
+
+        REQUIRE(pMessage);
+        REQUIRE(*CastUnique<SendModMessageRequest>(std::move(pMessage)) == sendMessage);
+    }
+
+    SECTION("NotifyModMessage")
+    {
+        NotifyModMessage sendMessage;
+        sendMessage.Scope = GENERATE(SkyrimTogetherAPI::ChannelScope::Party, SkyrimTogetherAPI::ChannelScope::Nearby);
+        sendMessage.Channel = channel;
+        sendMessage.SenderPlayerId = 3;
+        sendMessage.Data = payload;
+
+        Buffer buff(1000);
+        Buffer::Writer writer(&buff);
+        sendMessage.Serialize(writer);
+
+        Buffer::Reader reader(&buff);
+        auto pMessage = ServerMessageFactory{}.Extract(reader);
+
+        REQUIRE(pMessage);
+        REQUIRE(*CastUnique<NotifyModMessage>(std::move(pMessage)) == sendMessage);
+    }
+}
+
+TEST_CASE("Mod message with a bogus length", "[encoding.mod_message]")
+{
+    // A length prefix far larger than the packet must not be allocated, the message just comes out empty
+    Buffer buff(1000);
+    Buffer::Writer writer(&buff);
+    Serialization::WriteVarInt(writer, 0xFFFFFFFFFFull);
+
+    Buffer::Reader reader(&buff);
+    SendModMessageRequest request;
+    request.DeserializeRaw(reader);
+
+    REQUIRE(request.Channel.empty());
+    REQUIRE(request.Data.empty());
+}
+
+TEST_CASE("Mod message channel names", "[encoding.mod_message]")
+{
+    REQUIRE(ModMessage::IsValidChannelName("Campfire_Sync-1.0"));
+    REQUIRE(ModMessage::IsValidChannelName(String(SkyrimTogetherAPI::kMaxChannelNameSize, 'a')));
+    REQUIRE_FALSE(ModMessage::IsValidChannelName(""));
+    REQUIRE_FALSE(ModMessage::IsValidChannelName(String(SkyrimTogetherAPI::kMaxChannelNameSize + 1, 'a')));
+    REQUIRE_FALSE(ModMessage::IsValidChannelName("has space"));
+    REQUIRE_FALSE(ModMessage::IsValidChannelName(String("nul\0", 4)));
+}
+
 TEST_CASE("StringCache", "[encoding.string_cache]")
 {
     SECTION("Messages")
@@ -851,4 +924,18 @@ TEST_CASE("StringCache", "[encoding.string_cache]")
 
         REQUIRE(update == recvUpdate);
     }
+}
+
+TEST_CASE("Mod message rejects an unknown audience", "[encoding.mod_message]")
+{
+    SendModMessageRequest message;
+    message.Channel = "Test.Scope";
+    message.Scope = static_cast<SkyrimTogetherAPI::ChannelScope>(255);
+    Buffer buffer(128);
+    Buffer::Writer writer(&buffer);
+    message.SerializeRaw(writer);
+    Buffer::Reader reader(&buffer);
+    SendModMessageRequest received;
+    received.DeserializeRaw(reader);
+    REQUIRE(received.Channel.empty());
 }

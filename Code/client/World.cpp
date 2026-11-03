@@ -25,6 +25,8 @@
 #include <Services/NameTagService.h>
 #include <Services/DroppedItemService.h>
 #include <Services/VoiceService.h>
+#include <Services/PluginService.h>
+#include <Messages/NotifyModMessage.h>
 
 #include <Events/PreUpdateEvent.h>
 #include <Events/UpdateEvent.h>
@@ -63,6 +65,8 @@ World::World()
     ctx().emplace<DroppedItemService>(*this, m_dispatcher, m_transport);
     ctx().emplace<VoiceService>(*this, m_dispatcher, m_transport);
 
+    m_dispatcher.sink<NotifyModMessage>().connect<&PluginService::OnNotifyModMessage>(PluginService::Get());
+
     BehaviorVar::Get()->Init();
 }
 
@@ -81,6 +85,8 @@ void World::Update() noexcept
     // Force run this before so we get the tasks scheduled to run
     m_runner.OnUpdate(UpdateEvent(cDeltaSeconds));
     m_dispatcher.trigger(UpdateEvent(cDeltaSeconds));
+    // Snapshot party and loaded players after all sync handlers have finished.
+    PluginService::Get().Update();
 }
 
 RunnerService& World::GetRunner() noexcept
