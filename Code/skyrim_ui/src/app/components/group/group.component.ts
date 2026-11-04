@@ -98,7 +98,7 @@ export class GroupComponent implements OnInit, OnDestroy {
   }
 
   private subscribeChangeHealth() {
-    this.clientService.healthChange
+    this.groupService.memberHealthChange
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.flashGroup();
@@ -211,6 +211,10 @@ export class GroupComponent implements OnInit, OnDestroy {
         });
       }
     }
+  }
+
+  public trackByMemberId(_index: number, member: Player) {
+    return member.id;
   }
 
   public invite(playerId: number) {
