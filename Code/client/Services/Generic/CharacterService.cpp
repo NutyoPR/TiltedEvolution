@@ -660,6 +660,13 @@ void CharacterService::OnCharacterSpawn(const CharacterSpawnRequest& acMessage) 
             return;
         }
 
+        // Enabling and killing it here would run its death scripts again, e.g. repeating quest stages and rewards
+        if (acMessage.IsDead && pActor->IsDisabled() && pActor->GetExtension()->Reconciliation != ActorExtension::ReconciliationStage::WaitingForDisable)
+        {
+            spdlog::info("Skipped spawn for dead actor {:X} that is disabled locally, server id: {:X}", cActorId, acMessage.ServerId);
+            return;
+        }
+
         const auto view = m_world.view<FormIdComponent>();
         const auto itor = std::find_if(std::begin(view), std::end(view), [cActorId, view](entt::entity entity) { return view.get<FormIdComponent>(entity).Id == cActorId; });
 
