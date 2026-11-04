@@ -40,10 +40,10 @@ struct NameTagService
         // Party: party members' chat and dialogue choices float above them. On: strangers' chat too.
         Filter FloatingChat = Filter::kParty;
         float FontSize = 16.f;
-        float NameFadeStart = 3000.f;
-        float NameInvisible = 5000.f;
-        float PartyFadeStart = 3000.f;
-        float PartyInvisible = 5000.f;
+        float NameFadeStart = 2000.f;
+        float NameInvisible = 8000.f;
+        float PartyFadeStart = 2000.f;
+        float PartyInvisible = 8000.f;
         // Drawn in italics instead of the name of players whose name is hidden.
         String StrangerLabel = "Stranger";
         // Players whose real name may be shown. The UI decides this from the
