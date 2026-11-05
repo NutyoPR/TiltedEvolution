@@ -68,6 +68,7 @@ enum ClientOpcode : unsigned char
     kVoiceDataRequest,
     kVoiceStateRequest,
     kSendModMessageRequest,
+    kPlayerPerksRequest,
     kClientOpcodeMax
 };
 
@@ -141,5 +142,6 @@ enum ServerOpcode : unsigned char
     kNotifyDroppedItemsRemove,
     kNotifyVoiceData,
     kNotifyModMessage,
+    kNotifyPlayerPerks,
     kServerOpcodeMax
 };
