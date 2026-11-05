@@ -81,6 +81,18 @@ bool MagicTarget::AddTargetData::IsForbiddenEffect(Actor* apTarget)
     return pEffectItem->IsNightVisionEffect();
 }
 
+// Hostile area spells that are cast on the caster (Mass Paralysis, for example) have no projectile, so nothing about
+// them runs on any client but the caster's. Those are sent to the other clients once they find a player.
+static bool IsSelfCastAreaAttack(const MagicTarget::AddTargetData& acData) noexcept
+{
+    if (acData.pSpell->iHostileCount <= 0 || acData.pEffectItem->data.iArea <= 0 || !World::Get().GetServerSettings().PvpEnabled)
+        return false;
+
+    const SpellItem* pSpellItem = Cast<SpellItem>(acData.pSpell);
+    return pSpellItem && pSpellItem->eDelivery == MagicSystem::Delivery::SELF && pSpellItem->eCastingType != MagicSystem::CastingType::CONCENTRATION
+        && pSpellItem->eCastingType != MagicSystem::CastingType::CONSTANT_EFFECT;
+}
+
 Actor* MagicTarget::GetTargetAsActor()
 {
     TP_THIS_FUNCTION(TGetTargetAsActor, Actor*, MagicTarget);
@@ -117,6 +129,12 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
     {
         if (!arData.pCaster)
             return false;
+
+        if (arData.pCaster->GetExtension()->IsLocalPlayer() && IsSelfCastAreaAttack(arData))
+        {
+            World::Get().GetRunner().Trigger(addTargetEvent);
+            return TiltedPhoques::ThisCall(RealAddTarget, apThis, arData);
+        }
 
         if (!arData.pSpell->IsHealingSpell() && !arData.pSpell->IsBuffSpell())
             return false;
@@ -193,7 +211,13 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
 bool TP_MAKE_THISCALL(HookCheckAddEffectTargetData, MagicTarget::AddTargetData, void* arArgs, float afResistance)
 {
     if (s_autoSucceedEffectCheck)
-        return true;
+    {
+        // The victim's resistances and the effect's conditions still get to refuse an area attack from another player.
+        Actor* pTargetActor = (*static_cast<MagicTarget**>(arArgs))->GetTargetAsActor();
+        const bool cIsFromRemotePlayer = pTargetActor && pTargetActor->GetExtension()->IsLocalPlayer() && apThis->pCaster && apThis->pCaster->GetExtension()->IsRemotePlayer();
+        if (!cIsFromRemotePlayer || !IsSelfCastAreaAttack(*apThis))
+            return true;
+    }
 
     return TiltedPhoques::ThisCall(RealCheckAddEffectTargetData, apThis, arArgs, afResistance);
 }
