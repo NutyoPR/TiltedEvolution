@@ -15,4 +15,6 @@ struct AddTargetEvent
     bool IsDualCasting{false};
     bool ApplyHealPerkBonus{false};
     bool ApplyStaminaPerkBonus{false};
+    // A cloak hit on another player. Unlike other concentration spells, it isn't replayed on the victim's client.
+    bool IsPvpCloakHit{false};
 };

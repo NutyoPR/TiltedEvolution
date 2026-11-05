@@ -93,6 +93,13 @@ static bool IsSelfCastAreaAttack(const MagicTarget::AddTargetData& acData) noexc
         && pSpellItem->eCastingType != MagicSystem::CastingType::CONSTANT_EFFECT;
 }
 
+// CloakEffect passes this callback along with each of the targets it finds around the wearer.
+static bool IsCloakHit(const MagicTarget::AddTargetData& acData) noexcept
+{
+    POINTER_SKYRIMSE(uint8_t, s_cloakCallbackVtable, 205851);
+    return acData.pCallback && *reinterpret_cast<void* const*>(acData.pCallback) == s_cloakCallbackVtable.Get();
+}
+
 Actor* MagicTarget::GetTargetAsActor()
 {
     TP_THIS_FUNCTION(TGetTargetAsActor, Actor*, MagicTarget);
@@ -129,6 +136,15 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
     {
         if (!arData.pCaster)
             return false;
+
+        // The wearer's client is the one that knows how long the cloak lasts, a concentration cloak only lives on as
+        // long as it's being cast there. So it decides on the hits, and the copy's cloak is ignored on the victim's client.
+        if (IsCloakHit(arData) && arData.pCaster->GetExtension()->IsLocalPlayer() && World::Get().GetServerSettings().PvpEnabled)
+        {
+            addTargetEvent.IsPvpCloakHit = true;
+            World::Get().GetRunner().Trigger(addTargetEvent);
+            return false;
+        }
 
         if (arData.pCaster->GetExtension()->IsLocalPlayer() && IsSelfCastAreaAttack(arData))
         {
@@ -167,6 +183,10 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
 
                 // Heal and buff spells are already synced by the caster.
                 if (arData.pSpell->IsHealingSpell() || arData.pSpell->IsBuffSpell())
+                    return false;
+
+                // Cloak hits are synced by the wearer.
+                if (IsCloakHit(arData))
                     return false;
             }
         }
@@ -212,10 +232,11 @@ bool TP_MAKE_THISCALL(HookCheckAddEffectTargetData, MagicTarget::AddTargetData, 
 {
     if (s_autoSucceedEffectCheck)
     {
-        // The victim's resistances and the effect's conditions still get to refuse an area attack from another player.
+        // The victim's resistances and the effect's conditions still get to refuse an attack from another player.
+        // Heal and buff spells have already passed them on the caster's client.
         Actor* pTargetActor = (*static_cast<MagicTarget**>(arArgs))->GetTargetAsActor();
         const bool cIsFromRemotePlayer = pTargetActor && pTargetActor->GetExtension()->IsLocalPlayer() && apThis->pCaster && apThis->pCaster->GetExtension()->IsRemotePlayer();
-        if (!cIsFromRemotePlayer || !IsSelfCastAreaAttack(*apThis))
+        if (!cIsFromRemotePlayer || apThis->pSpell->IsHealingSpell() || apThis->pSpell->IsBuffSpell())
             return true;
     }
 
