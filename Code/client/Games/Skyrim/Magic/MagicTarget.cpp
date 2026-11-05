@@ -39,6 +39,7 @@ static thread_local bool s_autoSucceedEffectCheck = false;
 static thread_local bool s_applyHealPerkBonus = false;
 static thread_local bool s_applyStaminaPerkBonus = false;
 static thread_local bool s_isCheckingAttackFromPlayer = false;
+static thread_local bool s_isCheckingParalysis = false;
 
 void MagicTarget::DispelAllSpells(bool aNow) noexcept
 {
@@ -95,6 +96,16 @@ static bool IsSelfCastAreaAttack(const MagicTarget::AddTargetData& acData) noexc
 
     const SpellItem* pSpellItem = Cast<SpellItem>(acData.pSpell);
     return pSpellItem && pSpellItem->eDelivery == MagicSystem::Delivery::SELF && pSpellItem->eCastingType != MagicSystem::CastingType::CONSTANT_EFFECT;
+}
+
+// The ice form effect of Unbounded Freezing. Like the shout it comes from, it isn't meant to reach players.
+static bool IsChanneledParalysis(const MagicTarget::AddTargetData& acData) noexcept
+{
+    if (acData.pEffectItem->pEffectSetting->eArchetype != EffectArchetypes::ArchetypeID::kParalysis)
+        return false;
+
+    const SpellItem* pSpellItem = Cast<SpellItem>(acData.pSpell);
+    return pSpellItem && pSpellItem->eCastingType == MagicSystem::CastingType::CONCENTRATION;
 }
 
 // CloakEffect passes this callback along with each of the targets it finds around the wearer.
@@ -154,7 +165,7 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
             return false;
         }
 
-        if (arData.pCaster->GetExtension()->IsLocalPlayer() && IsSelfCastAreaAttack(arData))
+        if (arData.pCaster->GetExtension()->IsLocalPlayer() && IsSelfCastAreaAttack(arData) && !IsChanneledParalysis(arData))
         {
             addTargetEvent.IsPvpForwarded = true;
             World::Get().GetRunner().Trigger(addTargetEvent);
@@ -254,14 +265,16 @@ bool TP_MAKE_THISCALL(HookCheckAddEffectTargetData, MagicTarget::AddTargetData, 
         return true;
 
     s_isCheckingAttackFromPlayer = cIsAttackFromPlayer;
+    s_isCheckingParalysis = apThis->pEffectItem->pEffectSetting->eArchetype == EffectArchetypes::ArchetypeID::kParalysis;
     const bool cResult = TiltedPhoques::ThisCall(RealCheckAddEffectTargetData, apThis, arArgs, afResistance);
     s_isCheckingAttackFromPlayer = false;
+    s_isCheckingParalysis = false;
     return cResult;
 }
 
 // Effects keep players out of their reach with conditions, which have to let an attack from another player through:
 // cloak damage asks if the target is hostile to the caster or to the player, some area effects ask if the target isn't
-// the player. These only run when an effect is added, not while it's active.
+// the player. These only run when an effect is added, not while it's active. Paralysis keeps its player check.
 static bool HookConditionIsHostileToActor(TESObjectREFR* apSubject, void* apParam1, void* apParam2, double* apResult)
 {
     const bool cResult = RealConditionIsHostileToActor(apSubject, apParam1, apParam2, apResult);
@@ -273,7 +286,7 @@ static bool HookConditionIsHostileToActor(TESObjectREFR* apSubject, void* apPara
 static bool HookConditionGetIsID(TESObjectREFR* apSubject, void* apParam1, void* apParam2, double* apResult)
 {
     const bool cResult = RealConditionGetIsID(apSubject, apParam1, apParam2, apResult);
-    if (s_isCheckingAttackFromPlayer && apSubject == PlayerCharacter::Get())
+    if (s_isCheckingAttackFromPlayer && !s_isCheckingParalysis && apSubject == PlayerCharacter::Get())
         *apResult = 0.0;
     return cResult;
 }
