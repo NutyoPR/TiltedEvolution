@@ -24,6 +24,7 @@ TP_THIS_FUNCTION(TFindTargets, bool, MagicCaster, float afEffectivenessMult, int
 TP_THIS_FUNCTION(TAdjustForPerks, void, ActiveEffect, Actor* apCaster, MagicTarget* apTarget);
 TP_THIS_FUNCTION(THasPerk, bool, Actor, TESForm* apPerk, void* apUnk1, double* afReturnValue);
 TP_THIS_FUNCTION(TGetPerkRank, uint8_t, Actor, TESForm* apPerk);
+using TConditionFunction = bool(TESObjectREFR* apSubject, void* apParam1, void* apParam2, double* apResult);
 
 static TAddTarget* RealAddTarget = nullptr;
 static TCheckAddEffectTargetData* RealCheckAddEffectTargetData = nullptr;
@@ -31,10 +32,13 @@ static TFindTargets* RealFindTargets = nullptr;
 static TAdjustForPerks* RealAdjustForPerks = nullptr;
 static THasPerk* RealHasPerk = nullptr;
 static TGetPerkRank* RealGetPerkRank = nullptr;
+static TConditionFunction* RealConditionIsHostileToActor = nullptr;
+static TConditionFunction* RealConditionGetIsID = nullptr;
 
 static thread_local bool s_autoSucceedEffectCheck = false;
 static thread_local bool s_applyHealPerkBonus = false;
 static thread_local bool s_applyStaminaPerkBonus = false;
+static thread_local bool s_isCheckingAttackFromPlayer = false;
 
 void MagicTarget::DispelAllSpells(bool aNow) noexcept
 {
@@ -82,15 +86,15 @@ bool MagicTarget::AddTargetData::IsForbiddenEffect(Actor* apTarget)
 }
 
 // Hostile area spells that are cast on the caster (Mass Paralysis, for example) have no projectile, so nothing about
-// them runs on any client but the caster's. Those are sent to the other clients once they find a player.
+// them runs on any client but the caster's. Those are sent to the other clients once they find a player. A replayed
+// concentration spell doesn't get to decide on the targets either, since it only finds them once.
 static bool IsSelfCastAreaAttack(const MagicTarget::AddTargetData& acData) noexcept
 {
     if (acData.pSpell->iHostileCount <= 0 || acData.pEffectItem->data.iArea <= 0 || !World::Get().GetServerSettings().PvpEnabled)
         return false;
 
     const SpellItem* pSpellItem = Cast<SpellItem>(acData.pSpell);
-    return pSpellItem && pSpellItem->eDelivery == MagicSystem::Delivery::SELF && pSpellItem->eCastingType != MagicSystem::CastingType::CONCENTRATION
-        && pSpellItem->eCastingType != MagicSystem::CastingType::CONSTANT_EFFECT;
+    return pSpellItem && pSpellItem->eDelivery == MagicSystem::Delivery::SELF && pSpellItem->eCastingType != MagicSystem::CastingType::CONSTANT_EFFECT;
 }
 
 // CloakEffect passes this callback along with each of the targets it finds around the wearer.
@@ -121,6 +125,10 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
     if (arData.pEffectItem->IsVampireLordEffect())
         pTargetActorEx->GraphDescriptorHash = AnimationGraphDescriptor_VampireLordBehavior::m_key;
 
+    // The caster's client sends these, see below.
+    if (pTargetActorEx->IsLocalPlayer() && arData.pCaster && arData.pCaster->GetExtension()->IsRemotePlayer() && IsSelfCastAreaAttack(arData))
+        return false;
+
     if (ScopedSpellCastOverride::IsOverriden())
         return TiltedPhoques::ThisCall(RealAddTarget, apThis, arData);
 
@@ -141,14 +149,20 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
         // long as it's being cast there. So it decides on the hits, and the copy's cloak is ignored on the victim's client.
         if (IsCloakHit(arData) && arData.pCaster->GetExtension()->IsLocalPlayer() && World::Get().GetServerSettings().PvpEnabled)
         {
-            addTargetEvent.IsPvpCloakHit = true;
+            addTargetEvent.IsPvpForwarded = true;
             World::Get().GetRunner().Trigger(addTargetEvent);
             return false;
         }
 
         if (arData.pCaster->GetExtension()->IsLocalPlayer() && IsSelfCastAreaAttack(arData))
         {
+            addTargetEvent.IsPvpForwarded = true;
             World::Get().GetRunner().Trigger(addTargetEvent);
+
+            // A script (the lightning from Unbounded Storms, for example) only has to run on the victim's client.
+            if (arData.pEffectItem->pEffectSetting->eArchetype == EffectArchetypes::ArchetypeID::kScript)
+                return false;
+
             return TiltedPhoques::ThisCall(RealAddTarget, apThis, arData);
         }
 
@@ -230,17 +244,38 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
 
 bool TP_MAKE_THISCALL(HookCheckAddEffectTargetData, MagicTarget::AddTargetData, void* arArgs, float afResistance)
 {
-    if (s_autoSucceedEffectCheck)
-    {
-        // The victim's resistances and the effect's conditions still get to refuse an attack from another player.
-        // Heal and buff spells have already passed them on the caster's client.
-        Actor* pTargetActor = (*static_cast<MagicTarget**>(arArgs))->GetTargetAsActor();
-        const bool cIsFromRemotePlayer = pTargetActor && pTargetActor->GetExtension()->IsLocalPlayer() && apThis->pCaster && apThis->pCaster->GetExtension()->IsRemotePlayer();
-        if (!cIsFromRemotePlayer || apThis->pSpell->IsHealingSpell() || apThis->pSpell->IsBuffSpell())
-            return true;
-    }
+    // The victim's resistances and the effect's conditions still get to refuse an attack from another player.
+    // Heal and buff spells have already passed them on the caster's client.
+    Actor* pTargetActor = (*static_cast<MagicTarget**>(arArgs))->GetTargetAsActor();
+    const bool cIsAttackFromPlayer = pTargetActor && pTargetActor->GetExtension()->IsLocalPlayer() && apThis->pCaster && apThis->pCaster->GetExtension()->IsRemotePlayer()
+        && !apThis->pSpell->IsHealingSpell() && !apThis->pSpell->IsBuffSpell() && World::Get().GetServerSettings().PvpEnabled;
 
-    return TiltedPhoques::ThisCall(RealCheckAddEffectTargetData, apThis, arArgs, afResistance);
+    if (s_autoSucceedEffectCheck && !cIsAttackFromPlayer)
+        return true;
+
+    s_isCheckingAttackFromPlayer = cIsAttackFromPlayer;
+    const bool cResult = TiltedPhoques::ThisCall(RealCheckAddEffectTargetData, apThis, arArgs, afResistance);
+    s_isCheckingAttackFromPlayer = false;
+    return cResult;
+}
+
+// Effects keep players out of their reach with conditions, which have to let an attack from another player through:
+// cloak damage asks if the target is hostile to the caster or to the player, some area effects ask if the target isn't
+// the player. These only run when an effect is added, not while it's active.
+static bool HookConditionIsHostileToActor(TESObjectREFR* apSubject, void* apParam1, void* apParam2, double* apResult)
+{
+    const bool cResult = RealConditionIsHostileToActor(apSubject, apParam1, apParam2, apResult);
+    if (s_isCheckingAttackFromPlayer && apSubject == PlayerCharacter::Get())
+        *apResult = 1.0;
+    return cResult;
+}
+
+static bool HookConditionGetIsID(TESObjectREFR* apSubject, void* apParam1, void* apParam2, double* apResult)
+{
+    const bool cResult = RealConditionGetIsID(apSubject, apParam1, apParam2, apResult);
+    if (s_isCheckingAttackFromPlayer && apSubject == PlayerCharacter::Get())
+        *apResult = 0.0;
+    return cResult;
 }
 
 bool TP_MAKE_THISCALL(HookFindTargets, MagicCaster, float afEffectivenessMult, int32_t* aruiTargetCount, TESBoundObject* apSource, char abLoadCast, char abAdjust)
@@ -288,6 +323,8 @@ static TiltedPhoques::Initializer s_magicTargetHooks([]() {
     POINTER_SKYRIMSE(TAdjustForPerks, adjustForPerks, 34053);
     POINTER_SKYRIMSE(THasPerk, hasPerk, 21622);
     POINTER_SKYRIMSE(TGetPerkRank, getPerkRank, 37698);
+    POINTER_SKYRIMSE(TConditionFunction, conditionIsHostileToActor, 21472);
+    POINTER_SKYRIMSE(TConditionFunction, conditionGetIsID, 21487);
 
     RealAddTarget = addTarget.Get();
     RealCheckAddEffectTargetData = checkAddEffectTargetData.Get();
@@ -295,11 +332,15 @@ static TiltedPhoques::Initializer s_magicTargetHooks([]() {
     RealAdjustForPerks = adjustForPerks.Get();
     RealHasPerk = hasPerk.Get();
     RealGetPerkRank = getPerkRank.Get();
+    RealConditionIsHostileToActor = conditionIsHostileToActor.Get();
+    RealConditionGetIsID = conditionGetIsID.Get();
 
     TP_HOOK(&RealAddTarget, HookAddTarget);
     TP_HOOK(&RealCheckAddEffectTargetData, HookCheckAddEffectTargetData);
     TP_HOOK(&RealFindTargets, HookFindTargets);
     TP_HOOK(&RealAdjustForPerks, HookAdjustForPerks);
     TP_HOOK(&RealHasPerk, HookHasPerk);
+    TP_HOOK(&RealConditionIsHostileToActor, HookConditionIsHostileToActor);
+    TP_HOOK(&RealConditionGetIsID, HookConditionGetIsID);
     //TP_HOOK(&RealGetPerkRank, HookGetPerkRank);
 });
