@@ -4,8 +4,9 @@
 @import 'functions/mod';
 @import 'functions/rem';
 
-// Width of the menu bar and chat column (10% over the original 32vw, so longer translations and larger
-// fonts fit). The trade dock is placed right of it.
+// Usual width of the menu bar and chat column (10% over the original 32vw). The column grows past it when
+// a label word that can't be broken would not fit (long translations, large fonts); the trade dock is
+// placed right of wherever the column ends, see --app-root-controls-right in RootComponent.
 $-root-controls-width: 35.2vw;
 
 :host {
@@ -81,12 +82,11 @@ $-root-controls-width: 35.2vw;
   --trade-edge-gap: 1rem;
   position: fixed;
   box-sizing: border-box;
-  left: calc(#{$-root-controls-width} + #{4 * $-size-gap});
+  // One gap right of the controls column (its usual edge until RootComponent has measured it).
+  left: calc(var(--app-root-controls-right, calc(#{$-root-controls-width} + #{3 * $-size-gap})) + #{$-size-gap});
   right: var(--trade-edge-gap);
   top: 9vh;
   bottom: var(--trade-edge-gap);
-  width: calc(#{100vw - $-root-controls-width} - #{4 * $-size-gap} - var(--trade-edge-gap));
-  height: calc(91vh - var(--trade-edge-gap));
   min-width: 0;
   min-height: 0;
   pointer-events: none;
@@ -118,8 +118,10 @@ $-root-controls-width: 35.2vw;
   left: $-size-gap;
   display: flex;
   flex-direction: column;
-  // Reaches to one gap from the trade dock (which starts 4 gaps past $-root-controls-width).
   width: calc(#{$-root-controls-width} + #{2 * $-size-gap});
+  // Never narrower than the menu needs for its longest unbreakable words (the chat doesn't count, see below).
+  min-width: min-content;
+  max-width: calc(100vw - #{2 * $-size-gap});
   bottom: $-size-gap;
 }
 
@@ -128,48 +130,31 @@ $-root-controls-width: 35.2vw;
   flex: 0 0 auto;
 }
 
+// One column per button, each sized to its label, with or without the Trade button. Labels wrap between
+// words ("Hantera / Spelare"), but a column never gets narrower than its longest word plus padding, and that
+// is what widens the bar when a word can't be broken. A short label (Trade) leaves room for a long one.
 .app-root-menu {
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
-  display: flex;
-  height: 4rem;
-  margin: 0 auto;
-
-  > button {
-    flex: 1 1 auto;
-    padding-top: 0;
-    padding-bottom: 0;
-    // Labels wrap between words ("Hantera / Spelare") instead of pushing the last button out of the bar.
-    // The buttons are flex boxes themselves (label plus ornament arrows), so without min-width: 0 they
-    // refuse to shrink below their one-line width.
-    min-width: 0;
-    white-space: normal;
-    text-align: center;
-    justify-content: center;
-  }
-}
-
-.trading-controls .app-root-menu {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  min-height: 4rem;
   display: grid;
-  // Columns sized to their labels, so a short label (Trade) leaves room for one long word (Inställningar).
-  grid-template-columns: repeat(5, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: auto;
   align-items: stretch;
   gap: .2rem;
+  min-height: 4rem;
+  margin: 0 auto;
 
   > button {
     position: relative;
     justify-content: center;
     text-align: center;
     white-space: normal;
-    padding: .2rem .45rem;
+    // Room for the ornament arrows on both sides, plus a little air before the label.
+    padding: .2rem calc(.5em + .3rem);
 
-    // Ornament arrows must not reserve a second label's worth of horizontal space.
+    // The ornament arrows sit at the edges instead of being laid out next to the label; laid out inline
+    // they keep the label from wrapping (the button's minimum width becomes its one-line width).
     &::before,
     &::after {
       position: absolute;
@@ -183,7 +168,10 @@ $-root-controls-width: 35.2vw;
 }
 
 .app-root-chat {
-  width: 100%;
+  // Fill the column without adding to its minimum width: long chat lines wrap instead of widening it.
+  box-sizing: border-box;
+  width: 0;
+  min-width: 100%;
   height: 30vh;
   display: flex;
   flex-direction: column;

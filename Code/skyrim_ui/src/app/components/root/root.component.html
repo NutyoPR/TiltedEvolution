@@ -11,6 +11,7 @@
 
   <app-notifications [@notifications]="!(active$ | async)"></app-notifications>
   <div
+    #controls
     [@controls]="active$ | async"
     class="app-root-controls"
     [class.background-element]="(view$ | async) !== null && (view$ | async) !== RootView.TRADE"

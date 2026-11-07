@@ -1,5 +1,11 @@
 import { Overlay } from '@angular/cdk/overlay';
-import { Component, OnInit, ViewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
 import { TranslocoService } from '@ngneat/transloco';
 import { takeUntil } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -36,7 +42,7 @@ const REVEAL_EFFECT_DURATION_MS = 10000 // todo: pass value from C++?
   host: { 'data-app-root-game': environment.game.toString() },
   providers: [DestroyService],
 })
-export class RootComponent implements OnInit {
+export class RootComponent implements OnInit, OnDestroy {
   /* ### ENUMS ### */
   readonly RootView = View;
 
@@ -53,6 +59,29 @@ export class RootComponent implements OnInit {
   @ViewChild('chat') private chatComp!: ChatComponent;
   @ViewChild(GroupComponent) private groupComponent: GroupComponent;
 
+  // The menu column grows past its usual width when a label word can't be broken, so the trade dock is
+  // placed from where the column actually ends, published as --app-root-controls-right.
+  private controlsObserver?: ResizeObserver;
+  @ViewChild('controls') private set controlsElement(
+    ref: ElementRef<HTMLElement> | undefined,
+  ) {
+    this.controlsObserver?.disconnect();
+    this.controlsObserver = undefined;
+    if (!ref) {
+      return;
+    }
+
+    const element = ref.nativeElement;
+    this.controlsObserver = new ResizeObserver(() => {
+      // Layout offsets, not getBoundingClientRect, so the slide-in animation's transform doesn't move the dock.
+      this.host.nativeElement.style.setProperty(
+        '--app-root-controls-right',
+        `${element.offsetLeft + element.offsetWidth}px`,
+      );
+    });
+    this.controlsObserver.observe(element);
+  }
+
   public constructor(
     private readonly destroy$: DestroyService,
     // Created here so name tag settings reach the game as soon as the UI loads.
@@ -66,6 +95,7 @@ export class RootComponent implements OnInit {
     // Created at start so voice volumes and settings reach the game before any menu is opened
     private readonly voipService: VoipService,
     public readonly overlay: Overlay, // used for mockup
+    private readonly host: ElementRef<HTMLElement>,
   ) {
     this.translocoService.setActiveLang(
       this.settingService.settings.language.getValue(),
@@ -76,6 +106,10 @@ export class RootComponent implements OnInit {
     this.onInGameStateSubscription();
     this.onActivationStateSubscription();
     this.onFontSizeSubscription();
+  }
+
+  public ngOnDestroy(): void {
+    this.controlsObserver?.disconnect();
   }
 
   public onInGameStateSubscription() {
