@@ -92,8 +92,11 @@ bool CanApplyInventory(Actor* apActor) noexcept
     return apActor && apActor->currentProcess && apActor->currentProcess->middleProcess && apActor->GetNiNode();
 }
 
-void LogActorPlacement(const char* acpWhat, uint32_t aFormId) noexcept
+void LogActorPlacement(const char* acpWhat, uint32_t aFormId, spdlog::level::level_enum aLevel = spdlog::level::info) noexcept
 {
+    if (!spdlog::should_log(aLevel))
+        return;
+
     auto* pActor = Cast<Actor>(TESForm::GetById(aFormId));
     const auto* pPlayer = PlayerCharacter::Get();
     if (!pActor || !pPlayer)
@@ -104,7 +107,7 @@ void LogActorPlacement(const char* acpWhat, uint32_t aFormId) noexcept
     const auto* pWorldSpace = pActor->GetWorldSpace();
     const auto* pPlayerWorldSpace = pPlayer->GetWorldSpace();
     const auto* pExtension = pActor->GetExtension();
-    spdlog::info("[ActorPlacement] {} {:X}: cell {:X}, worldspace {:X}, position ({:.0f}, {:.0f}, {:.0f}), remote {}; player cell {:X}, worldspace {:X}, position ({:.0f}, {:.0f}, {:.0f})",
+    spdlog::log(aLevel, "[ActorPlacement] {} {:X}: cell {:X}, worldspace {:X}, position ({:.0f}, {:.0f}, {:.0f}), remote {}; player cell {:X}, worldspace {:X}, position ({:.0f}, {:.0f}, {:.0f})",
                  acpWhat, aFormId, pCell ? pCell->formID : 0, pWorldSpace ? pWorldSpace->formID : 0, pActor->position.x, pActor->position.y,
                  pActor->position.z, pExtension && pExtension->IsRemote(), pPlayerCell ? pPlayerCell->formID : 0, pPlayerWorldSpace ? pPlayerWorldSpace->formID : 0,
                  pPlayer->position.x, pPlayer->position.y, pPlayer->position.z);
@@ -570,9 +573,9 @@ void CharacterService::OnAssignCharacter(const AssignCharacterResponse& acMessag
         spdlog::info("[ActorPlacement] Moving remote {:X} to owner worldspace {:X}:{:X}, cell {:X}:{:X}, position ({:.0f}, {:.0f}, {:.0f})", pActor->formID,
                      acMessage.WorldSpaceId.ModId, acMessage.WorldSpaceId.BaseId, acMessage.CellId.ModId, acMessage.CellId.BaseId, acMessage.Position.x, acMessage.Position.y,
                      acMessage.Position.z);
-        LogActorPlacement("Before move", pActor->formID);
+        LogActorPlacement("Before move", pActor->formID, spdlog::level::debug);
         MoveActor(pActor, acMessage.WorldSpaceId, acMessage.CellId, acMessage.Position);
-        LogActorPlacement("After move", pActor->formID);
+        LogActorPlacement("After move", pActor->formID, spdlog::level::debug);
 
         // The owner's leveled pick rides the assignment response for actors we discovered ourselves
         ApplyLeveledNpcPick(pActor, acMessage.LeveledNpcPickId);

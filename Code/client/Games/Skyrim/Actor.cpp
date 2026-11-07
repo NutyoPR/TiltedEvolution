@@ -477,8 +477,12 @@ bool TP_MAKE_THISCALL(HookRemoveSpell, Actor, MagicItem* apSpell)
 namespace
 {
 // Diagnostic for characters constructed or loaded without a valid form ID.
-void LogFormIdZeroActor(const char* acpWhere, const Actor* apActor) noexcept
+// Every loaded character is constructed with form ID 0 and gets its ID later, so the constructors log at debug only.
+void LogFormIdZeroActor(const char* acpWhere, const Actor* apActor, spdlog::level::level_enum aLevel = spdlog::level::warn) noexcept
 {
+    if (!spdlog::should_log(aLevel))
+        return;
+
     void* frames[24]{};
     const USHORT cCount = RtlCaptureStackBackTrace(1, static_cast<DWORD>(std::size(frames)), frames, nullptr);
     std::string stack;
@@ -499,7 +503,7 @@ void LogFormIdZeroActor(const char* acpWhere, const Actor* apActor) noexcept
         stack += fmt::format(" {}+{:X}", moduleName, cOffset);
     }
     const auto* pNpc = Cast<TESNPC>(apActor->baseForm);
-    spdlog::warn("[FormIdZeroActor] {}: actor {}, base {:X} ({}), parent cell {}, flags {:X}, thread {}, stack:{}", acpWhere, fmt::ptr(apActor),
+    spdlog::log(aLevel, "[FormIdZeroActor] {}: actor {}, base {:X} ({}), parent cell {}, flags {:X}, thread {}, stack:{}", acpWhere, fmt::ptr(apActor),
                  apActor->baseForm ? apActor->baseForm->formID : 0, pNpc && pNpc->fullName.value.AsAscii() ? pNpc->fullName.value.AsAscii() : "", fmt::ptr(apActor->parentCell),
                  apActor->flags, GetCurrentThreadId(), stack);
 }
@@ -511,7 +515,7 @@ Actor* TP_MAKE_THISCALL(HookCharacterConstructor, Actor)
     TiltedPhoques::ThisCall(RealCharacterConstructor, apThis);
 
     if (apThis->formID == 0)
-        LogFormIdZeroActor("Character constructor", apThis);
+        LogFormIdZeroActor("Character constructor", apThis, spdlog::level::debug);
 
     return apThis;
 }
@@ -523,7 +527,7 @@ Actor* TP_MAKE_THISCALL(HookCharacterConstructor2, Actor, uint8_t aUnk)
     TiltedPhoques::ThisCall(RealCharacterConstructor2, apThis, aUnk);
 
     if (apThis->formID == 0)
-        LogFormIdZeroActor("Character constructor 2", apThis);
+        LogFormIdZeroActor("Character constructor 2", apThis, spdlog::level::debug);
 
     return apThis;
 }
