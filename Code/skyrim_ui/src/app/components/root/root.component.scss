@@ -4,10 +4,9 @@
 @import 'functions/mod';
 @import 'functions/rem';
 
-// Usual width of the menu bar and chat column (10% over the original 32vw). The column grows past it when
-// a label word that can't be broken would not fit (long translations, large fonts); the trade dock is
-// placed right of wherever the column ends, see --app-root-controls-right in RootComponent.
-$-root-controls-width: 35.2vw;
+// Usual width of the menu bar and chat column. The column grows past it only when a label word that can't
+// be broken would not fit (long translations, large fonts); the trade dock follows it, see .trade-dock.
+$-root-controls-width: 32vw;
 
 :host {
   display: block;
@@ -82,14 +81,21 @@ $-root-controls-width: 35.2vw;
   --trade-edge-gap: 1rem;
   position: fixed;
   box-sizing: border-box;
-  // One gap right of the controls column (its usual edge until RootComponent has measured it).
-  left: calc(var(--app-root-controls-right, calc(#{$-root-controls-width} + #{3 * $-size-gap})) + #{$-size-gap});
+  // Beside the controls column, one gap right of where it ends (its usual edge until RootComponent has
+  // measured it).
+  left: calc(var(--app-root-controls-right, calc(#{$-root-controls-width} + #{$-size-gap})) + #{$-size-gap});
   right: var(--trade-edge-gap);
   top: 9vh;
   bottom: var(--trade-edge-gap);
   min-width: 0;
   min-height: 0;
   pointer-events: none;
+}
+
+// Cover the controls when there is not enough room alongside them.
+:host[data-trade-dock='popup'] .trade-dock {
+  left: var(--trade-edge-gap);
+  top: var(--trade-edge-gap);
 }
 
 ::ng-deep {
@@ -118,7 +124,7 @@ $-root-controls-width: 35.2vw;
   left: $-size-gap;
   display: flex;
   flex-direction: column;
-  width: calc(#{$-root-controls-width} + #{2 * $-size-gap});
+  width: $-root-controls-width;
   // Never narrower than the menu needs for its longest unbreakable words (the chat doesn't count, see below).
   min-width: min-content;
   max-width: calc(100vw - #{2 * $-size-gap});

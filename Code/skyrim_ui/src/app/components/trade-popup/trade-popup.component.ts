@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Output } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   TradeInventoryItemView,
@@ -14,6 +14,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TradePopupComponent {
+  @Output() public readonly minimize = new EventEmitter<void>();
   public readonly categories = this.tradeUiService.categories;
   public readonly category$ = this.tradeUiService.category$;
   public readonly visibleInventory$ = this.tradeUiService.visibleInventory$;

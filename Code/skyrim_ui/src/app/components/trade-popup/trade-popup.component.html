@@ -1,4 +1,9 @@
 <app-window border="fancy" class="trade-popup">
+  <div class="trade-toolbar">
+    <button type="button" data-style-ornament="inverted" (click)="minimize.emit()">
+      {{ 'COMPONENT.TRADE_MENU.MINIMIZE' | transloco }}
+    </button>
+  </div>
   <ng-container *ngIf="session$ | async as session; else noTrade">
     <header class="trade-header">
       <div class="trade-summary">
@@ -88,8 +93,9 @@
                     {{ 'COMPONENT.TRADE_MENU.EQUIPPED_ITEM_WARNING' | transloco }}
                   </div>
                 </td>
-                <td class="available-column">{{ item.available }}</td>
+                <td class="available-column"><span class="compact-label">{{ 'COMPONENT.TRADE_MENU.ITEM_COLUMNS.AVAILABLE' | transloco }}: </span>{{ item.available }}</td>
                 <td>
+                  <span class="compact-label">{{ 'COMPONENT.TRADE_MENU.ITEM_COLUMNS.OFFERED' | transloco }}</span>
                   <div class="offer-editor">
                     <button
                       type="button"

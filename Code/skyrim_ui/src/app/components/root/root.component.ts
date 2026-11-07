@@ -2,6 +2,7 @@ import { Overlay } from '@angular/cdk/overlay';
 import {
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   OnInit,
   ViewChild,
@@ -29,6 +30,10 @@ import { map } from 'rxjs/operators';
 import { VoipService } from '../../services/voip.service';
 
 const REVEAL_EFFECT_DURATION_MS = 10000 // todo: pass value from C++?
+
+// Narrowest the trade window stays usable (its item table alone has 26rem of fixed columns). In rem, so a
+// larger font needs a wider dock; with less room beside the menu column the dock becomes a popup.
+const TRADE_DOCK_MIN_WIDTH_REM = 40;
 
 @Component({
   selector: 'app-root',
@@ -60,26 +65,23 @@ export class RootComponent implements OnInit, OnDestroy {
   @ViewChild(GroupComponent) private groupComponent: GroupComponent;
 
   // The menu column grows past its usual width when a label word can't be broken, so the trade dock is
-  // placed from where the column actually ends, published as --app-root-controls-right.
+  // placed from where the column actually ends. When the space right of it is too narrow for the trade
+  // window, the dock becomes a popup over the whole screen that can be minimized to use the chat.
+  // See .trade-dock in the stylesheet.
+  private controls?: HTMLElement;
   private controlsObserver?: ResizeObserver;
   @ViewChild('controls') private set controlsElement(
     ref: ElementRef<HTMLElement> | undefined,
   ) {
     this.controlsObserver?.disconnect();
     this.controlsObserver = undefined;
-    if (!ref) {
+    this.controls = ref?.nativeElement;
+    if (!this.controls) {
       return;
     }
 
-    const element = ref.nativeElement;
-    this.controlsObserver = new ResizeObserver(() => {
-      // Layout offsets, not getBoundingClientRect, so the slide-in animation's transform doesn't move the dock.
-      this.host.nativeElement.style.setProperty(
-        '--app-root-controls-right',
-        `${element.offsetLeft + element.offsetWidth}px`,
-      );
-    });
-    this.controlsObserver.observe(element);
+    this.controlsObserver = new ResizeObserver(() => this.layoutTradeDock());
+    this.controlsObserver.observe(this.controls);
   }
 
   public constructor(
@@ -110,6 +112,29 @@ export class RootComponent implements OnInit, OnDestroy {
 
   public ngOnDestroy(): void {
     this.controlsObserver?.disconnect();
+  }
+
+  @HostListener('window:resize')
+  public layoutTradeDock(): void {
+    const controls = this.controls;
+    if (!controls) {
+      return;
+    }
+
+    // Layout offsets, not getBoundingClientRect, so the slide-in animation's transform doesn't move the dock.
+    const controlsRight = controls.offsetLeft + controls.offsetWidth;
+
+    const rootFontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const besideWidth = window.innerWidth - controlsRight - 2 * rootFontPx;
+    const placement = besideWidth >= TRADE_DOCK_MIN_WIDTH_REM * rootFontPx ? 'beside' : 'popup';
+
+    const style = this.host.nativeElement.style;
+    style.setProperty('--app-root-controls-right', `${controlsRight}px`);
+    this.host.nativeElement.setAttribute('data-trade-dock', placement);
+    // Account for both frame borders and padding before choosing the inventory layout.
+    const dockWidth = placement === 'popup' ? window.innerWidth - 2 * rootFontPx : besideWidth;
+    const contentWidth = dockWidth - 52 - 2 * rootFontPx;
+    this.host.nativeElement.setAttribute('data-trade-compact', String(contentWidth < 40 * rootFontPx));
   }
 
   public onInGameStateSubscription() {
@@ -147,6 +172,7 @@ export class RootComponent implements OnInit, OnDestroy {
       )
       .subscribe(size => {
         document.documentElement.setAttribute('style', `font-size: ${size}px;`);
+        this.layoutTradeDock();
       });
   }
 
@@ -157,6 +183,13 @@ export class RootComponent implements OnInit, OnDestroy {
       this.sound.play(Sound.Focus);
     } else if (this.chatComp) {
       this.chatComp.focus();
+    }
+  }
+
+  /** Hides the trade window without ending the trade; the menu's Trade button brings it back. */
+  public minimizeTrade() {
+    if (this.uiRepository.getView() === View.TRADE) {
+      this.setView(null);
     }
   }
 

@@ -288,7 +288,7 @@ test('F2 activation changes retain the trade view, ready status and countdown', 
   }).outputText, {
     exports: rootExports, setTimeout,
     require(name) {
-      if (name === '@angular/core') return { Component: () => value => value, ViewChild: () => () => {} };
+      if (name === '@angular/core') return { Component: () => value => value, ViewChild: () => () => {}, HostListener: () => () => {} };
       if (name.startsWith('rxjs')) return require(name);
       if (name.endsWith('view.enum')) return { View: { TRADE: 'trade' } };
       if (name.endsWith('/environment')) return { environment: { game: false } };

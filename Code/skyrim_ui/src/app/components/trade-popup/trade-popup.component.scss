@@ -11,7 +11,7 @@
   min-width: 0;
   max-width: 100%;
   padding: $-size-gap;
-  overflow: hidden;
+  overflow-y: auto;
   background: $-color-background;
   font-family: $-font-default;
   font-size: 1rem;
@@ -30,7 +30,8 @@
 .category-filters button { flex: 0 0 auto; white-space: nowrap; text-transform: uppercase; font-size: 1rem; padding: .25rem .4rem; border: 1px solid #555; }
 .category-filters button.selected { background: #555; border-color: #ccc; opacity: 1; }
 .category-filters button:focus-visible { outline: 2px solid #ccc; outline-offset: -2px; }
-.inventory-list { flex: 1 1 auto; min-height: 0; overflow-y: scroll; scrollbar-gutter: stable; }
+// Keep the list usable on short screens; the window scrolls when its sections no longer fit.
+.inventory-list { flex: 1 1 auto; min-height: 10rem; overflow-y: scroll; scrollbar-gutter: stable; }
 .inventory-list { --quantity-step-width: 2rem; --quantity-gap: .35rem; --inventory-cell-padding: .55rem; }
 table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 th.available-column { width: 8rem; }
@@ -55,7 +56,7 @@ button:disabled, input:disabled { opacity: .45; }
 .quick-actions, .line { display: flex; gap: .35rem; align-items: center; }
 .offer-editor input { box-sizing: border-box; width: 100%; min-width: 0; font-size: 1rem; }
 .quick-actions { margin-top: .35rem; }
-.offers-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(8rem, 18%) minmax(0, 1fr); gap: $-size-gap; height: clamp(8rem, 21vh, 14rem); flex: 0 0 auto; }
+.offers-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(8rem, 18%) minmax(0, 1fr); gap: $-size-gap; height: clamp(8rem, 21vh, 14rem); min-height: 8rem; flex: 0 0 auto; }
 .offer-column { min-width: 0; min-height: 0; overflow-y: scroll; scrollbar-gutter: stable; padding: .65rem; border: 1px solid #555; overflow-wrap: anywhere; }
 .offer-column .section-title { position: sticky; top: -.65rem; padding: .35rem 0; background: $-color-background; }
 .offer-column > ul { margin: 0; padding: 0; list-style: none; }
@@ -72,7 +73,24 @@ button:disabled, input:disabled { opacity: .45; }
 .fill { height: 100%; background: #a8d59a; transition: width $-time-transition linear; }
 .countdown { flex: 0 0 auto; }
 .inventory-list::-webkit-scrollbar, .offer-column::-webkit-scrollbar { width: var(--scrollbar-thickness, .7rem); }
-@media (max-width: 800px) {
-  .trade-header { grid-template-columns: 1fr; }
-  .offers-section { gap: .5rem; grid-template-columns: minmax(0, 1fr) 7rem minmax(0, 1fr); }
+.trade-toolbar { display: flex; justify-content: flex-end; flex: 0 0 auto; }
+.compact-label { display: none; }
+.title, .status { overflow-wrap: anywhere; }
+
+// Use the measured content width in rem so XL text also triggers this layout on larger displays.
+:host-context([data-trade-compact='true']) {
+  .trade-header { grid-template-columns: minmax(0, 1fr); }
+  .inventory-list { flex: 0 0 auto; max-height: 18rem; }
+  table, tbody, tr, td { display: block; width: auto; }
+  thead { display: none; }
+  tr { padding-bottom: .75rem; border-bottom: 1px solid #555; }
+  td { border: 0; }
+  .available-column { text-align: left; padding-right: var(--inventory-cell-padding); }
+  .compact-label { display: inline; }
+  .offer-editor { display: flex; flex-wrap: wrap; white-space: normal; }
+  .offer-editor input { width: 4rem; }
+  .offers-section { height: auto; grid-template-columns: minmax(0, 1fr); }
+  .offer-column { max-height: 12rem; }
+  .actions { grid-row: 3; flex-direction: row; flex-wrap: wrap; }
+  .actions button { overflow-wrap: anywhere; }
 }

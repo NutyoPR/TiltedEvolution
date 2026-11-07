@@ -125,7 +125,7 @@
         <app-player-manager (done)="closeView()"></app-player-manager>
       </app-popup>
       <div *ngSwitchCase="RootView.TRADE" class="trade-dock" data-popup="trade">
-        <app-trade-popup></app-trade-popup>
+        <app-trade-popup (minimize)="minimizeTrade()"></app-trade-popup>
       </div>
     </ng-container>
 

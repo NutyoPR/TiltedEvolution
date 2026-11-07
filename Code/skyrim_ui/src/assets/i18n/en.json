@@ -212,6 +212,7 @@
       "BACK": "Back"
     },
     "TRADE_MENU": {
+      "MINIMIZE": "Minimize",
       "SEARCH_ITEMS": "Search items…",
       "NO_MATCHING_ITEMS": "No items match your search and category.",
       "FILTER_CATEGORY": "Filter inventory by item category",

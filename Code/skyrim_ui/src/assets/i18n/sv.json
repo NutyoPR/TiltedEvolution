@@ -191,6 +191,7 @@
       "BACK": "Tillbaka"
     },
     "TRADE_MENU": {
+      "MINIMIZE": "Minimera",
       "SEARCH_ITEMS": "Sök efter…",
       "NO_MATCHING_ITEMS": "Inga föremål matchar din sökning och kategori.",
       "FILTER_CATEGORY": "Filtrera via föremålskategorier",
