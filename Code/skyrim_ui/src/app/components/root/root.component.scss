@@ -4,6 +4,10 @@
 @import 'functions/mod';
 @import 'functions/rem';
 
+// Width of the menu bar and chat column (10% over the original 32vw, so longer translations and larger
+// fonts fit). The trade dock is placed right of it.
+$-root-controls-width: 35.2vw;
+
 :host {
   display: block;
 
@@ -77,11 +81,11 @@
   --trade-edge-gap: 1rem;
   position: fixed;
   box-sizing: border-box;
-  left: calc(32vw + #{4 * $-size-gap});
+  left: calc(#{$-root-controls-width} + #{4 * $-size-gap});
   right: var(--trade-edge-gap);
   top: 9vh;
   bottom: var(--trade-edge-gap);
-  width: calc(68vw - #{4 * $-size-gap} - var(--trade-edge-gap));
+  width: calc(#{100vw - $-root-controls-width} - #{4 * $-size-gap} - var(--trade-edge-gap));
   height: calc(91vh - var(--trade-edge-gap));
   min-width: 0;
   min-height: 0;
@@ -114,18 +118,9 @@
   left: $-size-gap;
   display: flex;
   flex-direction: column;
-  // As wide as the menu bar needs for its labels (some translations have long single words that can't wrap),
-  // but never narrower than the usual 32vw or wider than the screen. The chat only fills the width, see below.
-  width: max-content;
-  min-width: 32vw;
-  max-width: calc(100vw - #{2 * $-size-gap});
+  // Reaches to one gap from the trade dock (which starts 4 gaps past $-root-controls-width).
+  width: calc(#{$-root-controls-width} + #{2 * $-size-gap});
   bottom: $-size-gap;
-}
-
-// The trade dock is placed next to a 32vw column, so the controls keep that width while trading and the
-// menu wraps its labels in a grid instead (see .trading-controls .app-root-menu).
-.app-root-controls.trading-controls {
-  width: 32vw;
 }
 
 .app-root-menu,
@@ -135,16 +130,23 @@
 
 .app-root-menu {
   box-sizing: border-box;
-  width: auto;
+  width: 100%;
   max-width: 100%;
   display: flex;
   height: 4rem;
+  margin: 0 auto;
 
   > button {
-    flex: 1 0 auto;
-    white-space: nowrap;
+    flex: 1 1 auto;
     padding-top: 0;
     padding-bottom: 0;
+    // Labels wrap between words ("Hantera / Spelare") instead of pushing the last button out of the bar.
+    // The buttons are flex boxes themselves (label plus ornament arrows), so without min-width: 0 they
+    // refuse to shrink below their one-line width.
+    min-width: 0;
+    white-space: normal;
+    text-align: center;
+    justify-content: center;
   }
 }
 
@@ -155,13 +157,13 @@
   height: auto;
   min-height: 4rem;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  // Columns sized to their labels, so a short label (Trade) leaves room for one long word (Inställningar).
+  grid-template-columns: repeat(5, auto);
   align-items: stretch;
   gap: .2rem;
 
   > button {
     position: relative;
-    min-width: 0;
     justify-content: center;
     text-align: center;
     white-space: normal;
@@ -181,10 +183,7 @@
 }
 
 .app-root-chat {
-  // Fill the column without adding to its width: long chat lines wrap instead of widening the menu column.
-  box-sizing: border-box;
-  width: 0;
-  min-width: 100%;
+  width: 100%;
   height: 30vh;
   display: flex;
   flex-direction: column;
