@@ -402,9 +402,16 @@ void PlayerService::RunBeastFormDetection() const noexcept
     static uint32_t lastRaceFormID = 0;
     static std::chrono::steady_clock::time_point lastSendTimePoint;
     constexpr auto cDelayBetweenUpdates = 250ms;
-    // Werewolf (0xCDD84) and Vampire Lord (0x200283A)
-    constexpr auto isBeastRace = [](uint32_t aFormId) noexcept {
-        return aFormId == 0xCDD84 || aFormId == 0x200283A;
+    // Werewolf (0xCDD84) and Vampire Lord (0x200283A), and any other non-playable race: mods transform the
+    // player with SetRace into their own beast races (e.g. Enderal's Theriantrophist wolf form), and without
+    // the respawn the remote puppet keeps its old body on the new race's skeleton and behavior. Playable races
+    // are excluded so race changes in the RaceSex menu don't respawn the puppet.
+    const auto isBeastRace = [](uint32_t aFormId) noexcept {
+        if (aFormId == 0xCDD84 || aFormId == 0x200283A)
+            return true;
+
+        const TESRace* pRace = Cast<TESRace>(TESForm::GetById(aFormId));
+        return pRace && !pRace->IsPlayable();
     };
 
     const auto now = std::chrono::steady_clock::now();
