@@ -1583,7 +1583,13 @@ static TiltedPhoques::Initializer s_actorHooks(
         TP_HOOK(&RealSpawnActorInWorld, HookSpawnActorInWorld);
         TP_HOOK(&RealDamageActor, HookDamageActor);
         TP_HOOK(&RealApplyActorEffect, HookApplyActorEffect);
-        TP_HOOK(&RealRegenAttributes, HookRegenAttributes);
+        // Zenderal: not installed. ID 37448 is Actor::GetSubmergedLevel(float aZ, TESObjectCELL* apCell)
+        // (CommonLibSSE-NG RelocationID(36452, 37448); on 1.7.104 it takes the float in xmm1, compares r8 with
+        // the actor's parentCell and calls the cell's water-height check), not a regen function. Whenever edx
+        // happened to be 24 (kHealth) the hook's extra calls clobbered xmm1/r8, and the game read the water
+        // height of a garbage cell (SkyrimSE.exe+2BEE00, rcx 0x7FFFFFFFFFFFFFFC; two PCs, 2026-11-09).
+        // Health still syncs through the damage/effect hooks and ActorValueService's broadcast.
+        // TP_HOOK(&RealRegenAttributes, HookRegenAttributes);
         TP_HOOK(&RealAddInventoryItem, HookAddInventoryItem);
         TP_HOOK(&RealPickUpObject, HookPickUpObject);
         TP_HOOK(&RealDropObject, HookDropObject);
