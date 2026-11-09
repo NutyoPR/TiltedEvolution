@@ -40,8 +40,10 @@ void TP_MAKE_THISCALL(HookSpellCast, ActorMagicCaster, bool abSuccess, int32_t a
         }
     }
 
+    // Read everything the event needs now: it is handled on the next World update, when this caster may be gone.
     if (apSpell)
-        World::Get().GetRunner().Trigger(SpellCastEvent(apThis, apSpell->formID, targetFormId));
+        World::Get().GetRunner().Trigger(SpellCastEvent(apThis->pCasterActor->formID, static_cast<int32_t>(apThis->GetCastingSource()),
+                                                        apThis->GetIsDualCasting(), apSpell->formID, targetFormId));
 
     TiltedPhoques::ThisCall(RealSpellCast, apThis, abSuccess, auiTargetCount, apSpell);
 }
