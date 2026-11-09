@@ -24,11 +24,20 @@ thread_local int g_forcedActionResult = -1;
 
 uint8_t TP_MAKE_THISCALL(HookPerformAction, ActorMediator, TESActionData* apAction)
 {
+    // Zenderal: the game also performs actions with no actor or no BGSAction; there is nothing to sync then, so the
+    // game handles them alone. In Enderal an NPC's TESActionData came through with action == nullptr and crashed on
+    // the formID read below (Crash Logger: mov ecx, [rax+0x14], rax = 0, this file's ActionId line).
+    if (!apAction || !static_cast<Actor*>(apAction->actor))
+        return TiltedPhoques::ThisCall(RealPerformAction, apThis, apAction);
+
     auto pActor = apAction->actor;
     const auto pExtension = pActor->GetExtension();
 
     if (!pExtension->IsRemote() || g_forceAnimation)
     {
+        if (!apAction->action)
+            return TiltedPhoques::ThisCall(RealPerformAction, apThis, apAction);
+
         ActionEvent action;
         action.State1 = pActor->actorState.flags1;
         action.State2 = pActor->actorState.flags2;
