@@ -269,7 +269,9 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
         return;
     }
 
-    if (message.Reason != OwnershipReleaseReason::Relinquish && message.Reason != OwnershipReleaseReason::DeclineGrant)
+    // Deleted is a release too: the owner's game no longer has the actor at all.
+    const bool isRelease = message.Reason == OwnershipReleaseReason::Relinquish || message.Reason == OwnershipReleaseReason::Deleted;
+    if (!isRelease && message.Reason != OwnershipReleaseReason::DeclineGrant)
     {
         spdlog::warn("Ignored ownership release with invalid reason from player {:X} for actor {:X}", acMessage.pPlayer->GetId(), message.ServerId);
         return;
@@ -283,7 +285,25 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
         return;
     }
 
-    if (message.Reason == OwnershipReleaseReason::Relinquish && (message.WorldSpaceId || message.CellId))
+    if (message.Reason == OwnershipReleaseReason::Deleted)
+    {
+        // Zenderal: a temporary (a runtime FF actor, so no FormIdComponent: PlaceAtMe spawns such as the Fog Wood's waves)
+        // exists on the other clients only as the copy this server gave them, which they delete on NotifyRemoveCharacter.
+        // Removing the character drops it everywhere; handing it to the next player in range kept every deleted corpse
+        // alive and sent them all back as dead spawns when the deleter re-entered the area.
+        if (!m_world.try_get<FormIdComponent>(cEntity) && !characterComponent.IsPlayer())
+        {
+            spdlog::info("Removing temporary actor {:X} deleted by its owner {:X}", message.ServerId, acMessage.pPlayer->GetId());
+            m_world.GetDispatcher().trigger(CharacterRemoveEvent(message.ServerId));
+            return;
+        }
+
+        // A plugin-placed actor a quest disabled or deleted: the clients only SetRemote(false) on removal and keep the actor,
+        // so removing the character would just leave their copies unsynced. Released like a plain Relinquish instead.
+        spdlog::debug("Deleted actor {:X} from player {:X} is not temporary, handing it on instead", message.ServerId, acMessage.pPlayer->GetId());
+    }
+
+    if (isRelease && (message.WorldSpaceId || message.CellId))
     {
         const auto* pFormIdComponent = m_world.try_get<FormIdComponent>(cEntity);
         if (pFormIdComponent)
@@ -308,7 +328,7 @@ void CharacterService::OnOwnershipTransferRequest(const PacketEvent<RequestOwner
 
     // A normal release starts a fresh search. A declined grant continues the current
     // search, retaining failed candidates so unloaded clients cannot bounce ownership.
-    if (message.Reason == OwnershipReleaseReason::Relinquish)
+    if (isRelease)
         ownerComponent.InvalidOwners.clear();
 
     ownerComponent.InvalidOwners.push_back(acMessage.pPlayer);
