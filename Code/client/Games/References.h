@@ -15,6 +15,9 @@ float* GetGreetDistance() noexcept;
 float* GetVATSSelectTargetTimeMultiplier() noexcept;
 } // namespace Settings
 
+// ObjectReference.PlaySubGraphAnimation without sending it to the other players.
+void PlaySubGraphAnimationUnsynced(TESObjectREFR* apRef, const char* acpEventName) noexcept;
+
 void FadeOutGame(bool aFadingOut, bool aBlackFade, float aFadeDuration, bool aRemainVisible, float aSecondsToFade) noexcept;
 
 struct ExActor : Actor, ActorExtension

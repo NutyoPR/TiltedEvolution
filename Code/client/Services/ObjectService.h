@@ -17,6 +17,9 @@ struct WaveCommandEvent;
 struct AssignObjectsResponse;
 struct NotifyScriptAnimation;
 struct NotifyRemoveObjects;
+struct UpdateEvent;
+struct NotifyEquipmentChanges;
+struct CharacterSpawnRequest;
 
 /**
  * @brief Handles objects in the environment.
@@ -38,6 +41,10 @@ private:
     void OnScriptAnimationEvent(const ScriptAnimationEvent&) noexcept;
     void OnWaveCommand(const WaveCommandEvent&) noexcept;
     void OnNotifyScriptAnimation(const NotifyScriptAnimation&) noexcept;
+    void OnUpdate(const UpdateEvent&) noexcept;
+    void OnNotifyEquipmentChanges(const NotifyEquipmentChanges&) noexcept;
+    void OnCharacterSpawnRequest(const CharacterSpawnRequest&) noexcept;
+    void ScheduleSubGraphReplay(uint32_t aServerId, double aDelay) noexcept;
 
     BSTEventResult OnEvent(const TESActivateEvent*, const EventDispatcher<TESActivateEvent>*) override;
 
@@ -57,4 +64,16 @@ private:
     entt::scoped_connection m_scriptAnimationConnection;
     entt::scoped_connection m_scriptAnimationNotifyConnection;
     entt::scoped_connection m_waveCommandConnection;
+    entt::scoped_connection m_updateConnection;
+    entt::scoped_connection m_equipmentChangesConnection;
+    entt::scoped_connection m_characterSpawnConnection;
+
+    // The last subgraph event of each remote actor, by server id. A skin armor that isn't equipped or loaded yet
+    // when it arrives misses it, so it's played again a moment after the actor's gear or body changes.
+    struct SubGraphReplay
+    {
+        String EventName;
+        double Delay = -1.0;
+    };
+    Map<uint32_t, SubGraphReplay> m_subGraphReplays;
 };

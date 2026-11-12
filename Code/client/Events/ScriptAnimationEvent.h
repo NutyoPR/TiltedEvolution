@@ -5,10 +5,11 @@
  */
 struct ScriptAnimationEvent
 {
-    ScriptAnimationEvent(uint32_t aFormID, String aAnimation, String aEventName)
+    ScriptAnimationEvent(uint32_t aFormID, String aAnimation, String aEventName, bool aIsSubGraph = false)
         : FormID(aFormID)
         , Animation(aAnimation)
         , EventName(aEventName)
+        , IsSubGraph(aIsSubGraph)
     {
     }
 
@@ -17,4 +18,6 @@ struct ScriptAnimationEvent
     uint32_t FormID;
     String Animation;
     String EventName;
+    // Sent to the graphs of what the actor wears (ObjectReference.PlaySubGraphAnimation), not its own.
+    bool IsSubGraph;
 };

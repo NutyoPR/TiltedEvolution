@@ -5,6 +5,7 @@ void NotifyScriptAnimation::SerializeRaw(TiltedPhoques::Buffer::Writer& aWriter)
     Serialization::WriteVarInt(aWriter, FormID);
     Animation.Serialize(aWriter);
     EventName.Serialize(aWriter);
+    Serialization::WriteBool(aWriter, IsSubGraph);
 }
 
 void NotifyScriptAnimation::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReader) noexcept
@@ -14,4 +15,5 @@ void NotifyScriptAnimation::DeserializeRaw(TiltedPhoques::Buffer::Reader& aReade
     FormID = Serialization::ReadVarInt(aReader) & 0xFFFFFFFF;
     Animation.Deserialize(aReader);
     EventName.Deserialize(aReader);
+    IsSubGraph = Serialization::ReadBool(aReader);
 }

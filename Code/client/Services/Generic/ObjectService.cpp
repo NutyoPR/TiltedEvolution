@@ -19,6 +19,9 @@
 #include <Messages/ScriptAnimationRequest.h>
 #include <Messages/NotifyScriptAnimation.h>
 #include <Messages/NotifyRemoveObjects.h>
+#include <Messages/NotifyEquipmentChanges.h>
+#include <Messages/CharacterSpawnRequest.h>
+#include <Games/References.h>
 
 #include <PlayerCharacter.h>
 #include <Forms/TESObjectCELL.h>
@@ -44,6 +47,9 @@ ObjectService::ObjectService(World& aWorld, entt::dispatcher& aDispatcher, Trans
     m_scriptAnimationConnection = aDispatcher.sink<ScriptAnimationEvent>().connect<&ObjectService::OnScriptAnimationEvent>(this);
     m_scriptAnimationNotifyConnection = aDispatcher.sink<NotifyScriptAnimation>().connect<&ObjectService::OnNotifyScriptAnimation>(this);
     m_waveCommandConnection = aDispatcher.sink<WaveCommandEvent>().connect<&ObjectService::OnWaveCommand>(this);
+    m_updateConnection = aDispatcher.sink<UpdateEvent>().connect<&ObjectService::OnUpdate>(this);
+    m_equipmentChangesConnection = aDispatcher.sink<NotifyEquipmentChanges>().connect<&ObjectService::OnNotifyEquipmentChanges>(this);
+    m_characterSpawnConnection = aDispatcher.sink<CharacterSpawnRequest>().connect<&ObjectService::OnCharacterSpawnRequest>(this);
 
     EventDispatcherManager::Get()->activateEvent.RegisterSink(this);
 }
@@ -115,6 +121,7 @@ bool ShouldSyncObject(const TESObjectREFR* apObject, const Set<const TESObjectRE
 
 void ObjectService::OnDisconnected(const DisconnectedEvent&) noexcept
 {
+    m_subGraphReplays.clear();
     ObjectSystem::Clear(m_world);
 }
 
@@ -446,6 +453,7 @@ void ObjectService::OnScriptAnimationEvent(const ScriptAnimationEvent& acEvent) 
     request.FormID = serverIdRes.value();
     request.Animation = acEvent.Animation;
     request.EventName = acEvent.EventName;
+    request.IsSubGraph = acEvent.IsSubGraph;
 
     m_transport.Send(request);
 }
@@ -489,6 +497,15 @@ void ObjectService::OnNotifyScriptAnimation(const NotifyScriptAnimation& acMessa
     if (!pObject)
         return;
 
+    if (acMessage.IsSubGraph)
+    {
+        PlaySubGraphAnimationUnsynced(pObject, acMessage.EventName.c_str());
+
+        m_subGraphReplays[acMessage.FormID].EventName = acMessage.EventName.c_str();
+        ScheduleSubGraphReplay(acMessage.FormID, 1.0);
+        return;
+    }
+
     BSFixedString eventName(acMessage.EventName.c_str());
     if (acMessage.Animation == String{})
     {
@@ -501,6 +518,51 @@ void ObjectService::OnNotifyScriptAnimation(const NotifyScriptAnimation& acMessa
     }
 }
 
+void ObjectService::ScheduleSubGraphReplay(uint32_t aServerId, double aDelay) noexcept
+{
+    auto it = m_subGraphReplays.find(aServerId);
+    if (it != m_subGraphReplays.end())
+        it.value().Delay = aDelay;
+}
+
+void ObjectService::OnNotifyEquipmentChanges(const NotifyEquipmentChanges& acMessage) noexcept
+{
+    ScheduleSubGraphReplay(acMessage.ServerId, 1.0);
+}
+
+// A beast form respawns the copy, which then loads a new body that has missed the event.
+void ObjectService::OnCharacterSpawnRequest(const CharacterSpawnRequest& acMessage) noexcept
+{
+    ScheduleSubGraphReplay(acMessage.ServerId, 3.0);
+}
+
+void ObjectService::OnUpdate(const UpdateEvent& acEvent) noexcept
+{
+    for (auto it = m_subGraphReplays.begin(); it != m_subGraphReplays.end(); ++it)
+    {
+        auto& replay = it.value();
+        if (replay.Delay < 0.0)
+            continue;
+
+        replay.Delay -= acEvent.Delta;
+        if (replay.Delay > 0.0)
+            continue;
+
+        TESObjectREFR* pObject = Utils::GetByServerId<TESObjectREFR>(it->first);
+        if (!pObject || !pObject->GetNiNode())
+        {
+            // Not loaded yet, try again shortly.
+            replay.Delay = 1.0;
+            continue;
+        }
+
+        replay.Delay = -1.0;
+        spdlog::debug("Replaying subgraph event {} on {:X}", replay.EventName.c_str(), pObject->formID);
+        PlaySubGraphAnimationUnsynced(pObject, replay.EventName.c_str());
+    }
+}
+
+BSTEventResult ObjectService::OnEvent(const TESActivateEvent* acEvent, const EventDispatcher<TESActivateEvent>* aDispatcher)
 BSTEventResult ObjectService::OnEvent(const TESActivateEvent* acEvent, const EventDispatcher<TESActivateEvent>* aDispatcher)
 {
 #if ENVIRONMENT_DEBUG

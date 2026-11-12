@@ -163,6 +163,7 @@ void ObjectService::OnScriptAnimationRequest(const PacketEvent<ScriptAnimationRe
     message.FormID = packet.FormID;
     message.Animation = packet.Animation;
     message.EventName = packet.EventName;
+    message.IsSubGraph = packet.IsSubGraph;
 
     for (Player* pPlayer : m_world.GetPlayerManager())
     {

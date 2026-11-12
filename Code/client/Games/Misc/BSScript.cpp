@@ -40,6 +40,34 @@ static void HookDebugSendAnimationEvent(BSScript::IVirtualMachine* apVm, uint32_
     RealDebugSendAnimationEvent(apVm, aStackId, apTag, apRef, apEventName);
 }
 
+// Papyrus native: ObjectReference.PlaySubGraphAnimation(string asEventName). It reaches the graphs of what the actor
+// wears, such as a skin armor that fades itself in (Weredragon), which the actor's own animation sync doesn't cover.
+using TPlaySubGraphAnimation = void(BSScript::IVirtualMachine*, uint32_t, TESObjectREFR*, BSFixedString*);
+static TPlaySubGraphAnimation* RealPlaySubGraphAnimation = nullptr;
+
+static void HookPlaySubGraphAnimation(BSScript::IVirtualMachine* apVm, uint32_t aStackId, TESObjectREFR* apRef, BSFixedString* apEventName)
+{
+    const char* pcEventName = apEventName ? apEventName->AsAscii() : nullptr;
+    Actor* pActor = Cast<Actor>(apRef);
+    // Remote copies replay what their owner sends, so only the owner's call is sent.
+    if (pActor && pActor->GetExtension()->IsLocal() && pcEventName && pcEventName[0] != '\0')
+    {
+        spdlog::debug("PlaySubGraphAnimation captured: ref {:X}, event {}", apRef->formID, pcEventName);
+        World::Get().GetRunner().Trigger(ScriptAnimationEvent(apRef->formID, String{}, pcEventName, true));
+    }
+
+    RealPlaySubGraphAnimation(apVm, aStackId, apRef, apEventName);
+}
+
+void PlaySubGraphAnimationUnsynced(TESObjectREFR* apRef, const char* acpEventName) noexcept
+{
+    if (!RealPlaySubGraphAnimation || !apRef || !acpEventName)
+        return;
+
+    BSFixedString eventName(acpEventName);
+    RealPlaySubGraphAnimation(GameVM::Get()->virtualMachine, 0, apRef, &eventName);
+}
+
 void TP_MAKE_THISCALL(HookRegisterPapyrusFunction, BSScript::IVirtualMachine, NativeFunction* apFunction)
 {
     auto& runner = World::Get().GetRunner();
@@ -53,6 +81,13 @@ void TP_MAKE_THISCALL(HookRegisterPapyrusFunction, BSScript::IVirtualMachine, Na
         RealDebugSendAnimationEvent = reinterpret_cast<TDebugSendAnimationEvent*>(apFunction->functionAddress);
         TP_HOOK_IMMEDIATE(&RealDebugSendAnimationEvent, HookDebugSendAnimationEvent);
         spdlog::info("Hooked Debug.SendAnimationEvent at {}", apFunction->functionAddress);
+    }
+
+    if (!RealPlaySubGraphAnimation && apFunction->functionAddress && !strcmp(apFunction->typeName.AsAscii(), "ObjectReference") && !strcmp(apFunction->functionName.AsAscii(), "PlaySubGraphAnimation"))
+    {
+        RealPlaySubGraphAnimation = reinterpret_cast<TPlaySubGraphAnimation*>(apFunction->functionAddress);
+        TP_HOOK_IMMEDIATE(&RealPlaySubGraphAnimation, HookPlaySubGraphAnimation);
+        spdlog::info("Hooked ObjectReference.PlaySubGraphAnimation at {}", apFunction->functionAddress);
     }
 
     TiltedPhoques::ThisCall(RealRegisterPapyrusFunction, apThis, apFunction);
