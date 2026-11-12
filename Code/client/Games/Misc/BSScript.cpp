@@ -40,7 +40,7 @@ static void HookDebugSendAnimationEvent(BSScript::IVirtualMachine* apVm, uint32_
     RealDebugSendAnimationEvent(apVm, aStackId, apTag, apRef, apEventName);
 }
 
-// Papyrus native: ObjectReference.PlaySubGraphAnimation(string asEventName). It reaches the graphs of what the actor
+// Papyrus native: Actor.PlaySubGraphAnimation(string asEventName). It reaches the graphs of what the actor
 // wears, such as a skin armor that fades itself in (Weredragon), which the actor's own animation sync doesn't cover.
 using TPlaySubGraphAnimation = void(BSScript::IVirtualMachine*, uint32_t, TESObjectREFR*, BSFixedString*);
 static TPlaySubGraphAnimation* RealPlaySubGraphAnimation = nullptr;
@@ -83,11 +83,11 @@ void TP_MAKE_THISCALL(HookRegisterPapyrusFunction, BSScript::IVirtualMachine, Na
         spdlog::info("Hooked Debug.SendAnimationEvent at {}", apFunction->functionAddress);
     }
 
-    if (!RealPlaySubGraphAnimation && apFunction->functionAddress && !strcmp(apFunction->typeName.AsAscii(), "ObjectReference") && !strcmp(apFunction->functionName.AsAscii(), "PlaySubGraphAnimation"))
+    if (!RealPlaySubGraphAnimation && apFunction->functionAddress && !strcmp(apFunction->typeName.AsAscii(), "Actor") && !strcmp(apFunction->functionName.AsAscii(), "PlaySubGraphAnimation"))
     {
         RealPlaySubGraphAnimation = reinterpret_cast<TPlaySubGraphAnimation*>(apFunction->functionAddress);
         TP_HOOK_IMMEDIATE(&RealPlaySubGraphAnimation, HookPlaySubGraphAnimation);
-        spdlog::info("Hooked ObjectReference.PlaySubGraphAnimation at {}", apFunction->functionAddress);
+        spdlog::info("Hooked Actor.PlaySubGraphAnimation at {}", apFunction->functionAddress);
     }
 
     TiltedPhoques::ThisCall(RealRegisterPapyrusFunction, apThis, apFunction);
