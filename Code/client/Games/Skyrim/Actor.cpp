@@ -1068,12 +1068,25 @@ TP_THIS_FUNCTION(TDamageActor, bool, Actor, float aDamage, Actor* apHitter, bool
 static TDamageActor* RealDamageActor = nullptr;
 
 // TODO: this is flawed, since it does not account for invulnerable actors
+// Party damage diagnostics (temporary): damage dealt by the local player or by an actor they command.
+static bool IsLocalPlayerDamage(Actor* apSource) noexcept
+{
+    if (!apSource || !apSource->GetExtension())
+        return false;
+    if (apSource->GetExtension()->IsLocalPlayer())
+        return true;
+    Actor* pCommander = apSource->GetCommandingActor();
+    return pCommander && pCommander->GetExtension() && pCommander->GetExtension()->IsLocalPlayer();
+}
+
 bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bool aKillMove)
 {
     if (apHitter)
         World::Get().GetRunner().Trigger(HitEvent(apHitter->formID, apThis->formID));
 
-    aDamage *= GameplayFormulas::GetPartyDamageMultiplier(apHitter);
+    const float cIncoming = aDamage;
+    const float cPartyMultiplier = GameplayFormulas::GetPartyDamageMultiplier(apHitter);
+    aDamage *= cPartyMultiplier;
 
     float realDamage = GameplayFormulas::CalculateRealDamage(apThis, aDamage, aKillMove);
 
@@ -1081,6 +1094,19 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
     bool wouldKill = (currentHealth - realDamage) <= 0.f;
 
     const auto* pExHittee = apThis->GetExtension();
+
+    // Diagnostics (temporary): what the engine actually applies here versus the estimate sent to the other clients.
+    const bool cLogHit = IsLocalPlayerDamage(apHitter);
+    auto applyHit = [&](const char* acPath)
+    {
+        const bool cResult = TiltedPhoques::ThisCall(RealDamageActor, apThis, aDamage, apHitter, aKillMove);
+        if (cLogHit)
+            spdlog::info("[PartyDamage] {}: target {:X} ({}), hitter {:X}, incoming {:.2f}, flag {}, party x{:.3f}, sent {:.2f}, engine applied {:.2f}",
+                         acPath, apThis->formID, pExHittee->IsLocal() ? "owned here" : "owned remotely", apHitter->formID, cIncoming, aKillMove,
+                         cPartyMultiplier, realDamage, currentHealth - apThis->GetActorValue(ActorValueInfo::kHealth));
+        return cResult;
+    };
+
     if (pExHittee->IsLocalPlayer())
     {
         if (!World::Get().GetServerSettings().PvpEnabled)
@@ -1091,7 +1117,7 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
         }
 
         World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -realDamage));
-        return TiltedPhoques::ThisCall(RealDamageActor, apThis, aDamage, apHitter, aKillMove);
+        return applyHit("player hit");
     }
     else if (pExHittee->IsRemotePlayer())
     {
@@ -1104,7 +1130,7 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
         if (pExHitter->IsLocalPlayer())
         {
             World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -realDamage));
-            return TiltedPhoques::ThisCall(RealDamageActor, apThis, aDamage, apHitter, aKillMove);
+            return applyHit("hit by local player");
         }
         if (pExHitter->IsRemotePlayer())
         {
@@ -1115,7 +1141,7 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
     if (pExHittee->IsLocal())
     {
         World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -realDamage));
-        return TiltedPhoques::ThisCall(RealDamageActor, apThis, aDamage, apHitter, aKillMove);
+        return applyHit("hit on actor owned here");
     }
     else
     {
@@ -1145,6 +1171,15 @@ void TP_MAKE_THISCALL(HookApplyActorEffect, ActiveEffect, Actor* apTarget, float
                 return;
             }
         }
+    }
+
+    // Diagnostics (temporary): damaging health effects (spells) from the local player or their summons.
+    if (pValueModEffect && pValueModEffect->actorValueIndex == ActorValueInfo::kHealth && aEffectValue < 0.0f && apTarget && apTarget->GetExtension())
+    {
+        Actor* pCaster = Cast<Actor>(TESObjectREFR::GetByHandle(apThis->hCaster));
+        if (IsLocalPlayerDamage(pCaster))
+            spdlog::info("[PartyDamage] spell effect: target {:X} ({}), caster {:X}, value {:.2f}", apTarget->formID,
+                         apTarget->GetExtension()->IsLocal() ? "owned here" : "owned remotely", pCaster->formID, aEffectValue);
     }
 
     return TiltedPhoques::ThisCall(RealApplyActorEffect, apThis, apTarget, aEffectValue, unk1);
