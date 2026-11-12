@@ -18,6 +18,6 @@ struct ScriptAnimationEvent
     uint32_t FormID;
     String Animation;
     String EventName;
-    // Sent to the graphs of what the actor wears (ObjectReference.PlaySubGraphAnimation), not its own.
+    // Sent to the graphs of what the actor wears (Actor.PlaySubGraphAnimation), not its own.
     bool IsSubGraph;
 };

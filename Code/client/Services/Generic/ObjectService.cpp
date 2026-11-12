@@ -494,17 +494,20 @@ void ObjectService::OnNotifyScriptAnimation(const NotifyScriptAnimation& acMessa
 {
     // FormID carries a server id; resolve it to whatever local form mirrors that entity
     TESObjectREFR* pObject = Utils::GetByServerId<TESObjectREFR>(acMessage.FormID);
-    if (!pObject)
-        return;
 
+    // Kept even when the copy isn't loaded yet, so it still gets the event once it is.
     if (acMessage.IsSubGraph)
     {
-        PlaySubGraphAnimationUnsynced(pObject, acMessage.EventName.c_str());
-
         m_subGraphReplays[acMessage.FormID].EventName = acMessage.EventName.c_str();
         ScheduleSubGraphReplay(acMessage.FormID, 1.0);
+
+        if (pObject)
+            PlaySubGraphAnimationUnsynced(pObject, acMessage.EventName.c_str());
         return;
     }
+
+    if (!pObject)
+        return;
 
     BSFixedString eventName(acMessage.EventName.c_str());
     if (acMessage.Animation == String{})
@@ -562,7 +565,6 @@ void ObjectService::OnUpdate(const UpdateEvent& acEvent) noexcept
     }
 }
 
-BSTEventResult ObjectService::OnEvent(const TESActivateEvent* acEvent, const EventDispatcher<TESActivateEvent>* aDispatcher)
 BSTEventResult ObjectService::OnEvent(const TESActivateEvent* acEvent, const EventDispatcher<TESActivateEvent>* aDispatcher)
 {
 #if ENVIRONMENT_DEBUG
