@@ -448,18 +448,18 @@ void MagicService::OnNotifyAddTarget(const NotifyAddTarget& acMessage) noexcept
     if (pEffect->IsSlowEffect())
         pActor = PlayerCharacter::Get();
 
-    // An NPC's hit on another player only lands on that player's own client, the copy's health comes from there.
-    const bool cIsNpcAttackOnPlayer = data.IsNpcAttackOnPlayer();
-    if (cIsNpcAttackOnPlayer && pActor->GetExtension()->IsRemotePlayer())
+    // A hit on another player only lands on that player's own client, the copy's health comes from there.
+    const bool cIsAttackOnPlayer = data.IsAttackOnPlayer();
+    if (cIsAttackOnPlayer && pActor->GetExtension()->IsRemotePlayer())
         return;
 
-    const bool cIsNpcAttackOnLocalPlayer = cIsNpcAttackOnPlayer && pActor->GetExtension()->IsLocalPlayer();
+    const bool cIsAttackOnLocalPlayer = cIsAttackOnPlayer && pActor->GetExtension()->IsLocalPlayer();
     const float cHealthBefore = pActor->GetActorValue(ActorValueInfo::kHealth);
 
     const bool cResult = pActor->magicTarget.AddTarget(data, acMessage.ApplyHealPerkBonus, acMessage.ApplyStaminaPerkBonus);
     spdlog::debug("Applied remote magic effect");
 
-    if (cIsNpcAttackOnLocalPlayer)
+    if (cIsAttackOnLocalPlayer)
         DamageDiagnostics::OnSpellHitReceived(pCaster, pSpell->GetName(), cEffectId, data.fMagnitude, cResult, cHealthBefore, pActor->GetActorValue(ActorValueInfo::kHealth));
 }
 
