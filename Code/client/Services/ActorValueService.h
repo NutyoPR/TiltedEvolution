@@ -16,6 +16,8 @@ struct NotifyActorValueChanges;
 struct NotifyActorMaxValueChanges;
 struct NotifyHealthChangeBroadcast;
 struct NotifyDeathStateChange;
+struct PlayerHitEvent;
+struct NotifyPlayerHit;
 
 struct Actor;
 
@@ -84,6 +86,14 @@ private:
      * @brief Receives death state changes and applies them locally.
      */
     void OnDeathStateChange(const NotifyDeathStateChange& acEvent) const noexcept;
+    /**
+     * @brief Sends a hit landed on a remote player to that player's client.
+     */
+    void OnPlayerHit(const PlayerHitEvent& acEvent) const noexcept;
+    /**
+     * @brief Applies a hit another client landed on the local player.
+     */
+    void OnNotifyPlayerHit(const NotifyPlayerHit& acMessage) const noexcept;
 
     /**
      * @brief Checks and broadcasts new actor values.

@@ -8,12 +8,15 @@
 #include <Games/References.h>
 #include <Components.h>
 #include <Systems/OwnershipSystem.h>
+#include <Systems/DamageDiagnostics.h>
 
 #include <Events/UpdateEvent.h>
 #include <Events/ActorRemovedEvent.h>
 #include <Events/ConnectedEvent.h>
 #include <Events/DisconnectedEvent.h>
 #include <Events/HealthChangeEvent.h>
+#include <Events/PlayerHitEvent.h>
+#include <Forms/TESObjectWEAP.h>
 
 #include <Messages/NotifyActorValueChanges.h>
 #include <Messages/RequestActorValueChanges.h>
@@ -23,6 +26,8 @@
 #include <Messages/RequestHealthChangeBroadcast.h>
 #include <Messages/NotifyDeathStateChange.h>
 #include <Messages/RequestDeathStateChange.h>
+#include <Messages/RequestPlayerHit.h>
+#include <Messages/NotifyPlayerHit.h>
 
 #include <misc/ActorValueOwner.h>
 
@@ -40,6 +45,8 @@ ActorValueService::ActorValueService(World& aWorld, entt::dispatcher& aDispatche
     m_dispatcher.sink<HealthChangeEvent>().connect<&ActorValueService::OnHealthChange>(this);
     m_dispatcher.sink<NotifyHealthChangeBroadcast>().connect<&ActorValueService::OnHealthChangeBroadcast>(this);
     m_dispatcher.sink<NotifyDeathStateChange>().connect<&ActorValueService::OnDeathStateChange>(this);
+    m_dispatcher.sink<PlayerHitEvent>().connect<&ActorValueService::OnPlayerHit>(this);
+    m_dispatcher.sink<NotifyPlayerHit>().connect<&ActorValueService::OnNotifyPlayerHit>(this);
 }
 
 void ActorValueService::CreateActorValuesComponent(const entt::entity aEntity, Actor* apActor) noexcept
@@ -343,19 +350,15 @@ void ActorValueService::OnHealthChangeBroadcast(const NotifyHealthChangeBroadcas
         return;
     }
 
+    DamageDiagnostics::OnHealthBroadcastReceived(acMessage.Id, acMessage.DeltaHealth);
+
     // A dead body with health can end up back on its feet, and there's nothing to take that health away again.
     if (!pActor->GetExtension()->IsPlayer() && pActor->GetExtension()->IsRemote() && pActor->IsDead())
         return;
 
-    // A player's health is owned by their own client. A delta for the local player is a hit that the attacking NPC's
-    // owner saw, see HookDamageActor(). Copies of other players take their owner's health from the actor value sync.
-    if (pActor->GetExtension()->IsLocalPlayer())
-    {
-        if (acMessage.DeltaHealth < 0.f)
-            pActor->ApplyHitFromOwner(-acMessage.DeltaHealth);
-        return;
-    }
-    if (pActor->GetExtension()->IsRemotePlayer())
+    // A player's health is owned by their own client, hits on it arrive as NotifyPlayerHit. Copies of other players
+    // take their owner's health from the actor value sync.
+    if (pActor->GetExtension()->IsPlayer())
         return;
 
     const float newHealth = pActor->GetActorValue(ActorValueInfo::kHealth) + acMessage.DeltaHealth;
@@ -465,4 +468,56 @@ void ActorValueService::OnDeathStateChange(const NotifyDeathStateChange& acMessa
     Actor* pActor = pFormId ? Cast<Actor>(TESForm::GetById(pFormId->Id)) : nullptr;
     if (!m_world.any_of<WaitingFor3D>(*entity))
         RemoteDeathSystem::Apply(pActor, acMessage.IsDead);
+}
+
+namespace
+{
+std::optional<uint32_t> ServerIdOfForm(World& aWorld, uint32_t aFormId) noexcept
+{
+    auto view = aWorld.view<FormIdComponent>();
+    const auto it = std::find_if(view.begin(), view.end(), [view, aFormId](entt::entity aEntity) { return view.get<FormIdComponent>(aEntity).Id == aFormId; });
+    if (it == view.end())
+        return std::nullopt;
+    return Utils::GetServerId(*it);
+}
+} // namespace
+
+void ActorValueService::OnPlayerHit(const PlayerHitEvent& acEvent) const noexcept
+{
+    if (!m_transport.IsConnected())
+        return;
+
+    const auto cHitteeId = ServerIdOfForm(m_world, acEvent.HitteeId);
+    if (!cHitteeId)
+    {
+        spdlog::warn("{}: no server id for hit player {:X}", __FUNCTION__, acEvent.HitteeId);
+        return;
+    }
+
+    RequestPlayerHit request;
+    request.HitteeId = *cHitteeId;
+    request.AttackerId = ServerIdOfForm(m_world, acEvent.AttackerId).value_or(0);
+    if (acEvent.WeaponId)
+        World::Get().GetModSystem().GetServerModId(acEvent.WeaponId, request.WeaponId);
+    request.Damage = acEvent.Damage;
+    request.Flags = acEvent.Flags;
+
+    m_transport.Send(request);
+}
+
+void ActorValueService::OnNotifyPlayerHit(const NotifyPlayerHit& acMessage) const noexcept
+{
+    Actor* pActor = Utils::GetByServerId<Actor>(acMessage.HitteeId);
+    if (!pActor || !pActor->GetExtension()->IsLocalPlayer())
+    {
+        spdlog::warn("{}: hit for {:X} is not for the local player", __FUNCTION__, acMessage.HitteeId);
+        return;
+    }
+
+    Actor* pAttacker = acMessage.AttackerId ? Utils::GetByServerId<Actor>(acMessage.AttackerId) : nullptr;
+    TESObjectWEAP* pWeapon = nullptr;
+    if (const uint32_t cWeaponId = World::Get().GetModSystem().GetGameId(acMessage.WeaponId))
+        pWeapon = Cast<TESObjectWEAP>(TESForm::GetById(cWeaponId));
+
+    pActor->ApplyHitFromOwner(pAttacker, pWeapon, acMessage.Damage, acMessage.Flags);
 }
