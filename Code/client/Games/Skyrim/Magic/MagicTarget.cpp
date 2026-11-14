@@ -18,6 +18,8 @@
 #include <Effects/ActiveEffect.h>
 #include <Forms/SpellItem.h>
 
+#include <Systems/DamageDiagnostics.h>
+
 TP_THIS_FUNCTION(TAddTarget, bool, MagicTarget, MagicTarget::AddTargetData& arData);
 TP_THIS_FUNCTION(TCheckAddEffectTargetData, bool, MagicTarget::AddTargetData, void* arArgs, float afResistance);
 TP_THIS_FUNCTION(TFindTargets, bool, MagicCaster, float afEffectivenessMult, int32_t* aruiTargetCount,
@@ -132,6 +134,30 @@ static bool IsCloakHit(const MagicTarget::AddTargetData& acData) noexcept
     return acData.pCallback && *reinterpret_cast<void* const*>(acData.pCallback) == s_cloakCallbackVtable.Get();
 }
 
+// The client running an NPC decides on its spell hits on players, the same as on its weapon hits. Its replayed
+// projectile on the victim's client can reach the victim and still not land, so the owner sends the hit and the victim's
+// client applies it with its own resistances. A concentration spell or a cloak is still applied by the replayed cast
+// on the victim's client, since only that one knows how long it keeps going there.
+bool MagicTarget::AddTargetData::IsNpcAttackOnPlayer() const noexcept
+{
+    if (!pCaster || !pSpell || !pEffectItem || pSpell->iHostileCount <= 0 || pSpell->IsHealingSpell() || pSpell->IsBuffSpell())
+        return false;
+
+    const ActorExtension* pCasterExtension = pCaster->GetExtension();
+    if (!pCasterExtension || pCasterExtension->IsPlayer())
+        return false;
+
+    // Without PvP a player's summon doesn't get to hurt other players at all.
+    if (pCaster->IsPlayerSummon() && !World::Get().GetServerSettings().PvpEnabled)
+        return false;
+
+    const SpellItem* pSpellItem = Cast<SpellItem>(pSpell);
+    if (pSpellItem && pSpellItem->eCastingType == MagicSystem::CastingType::CONCENTRATION)
+        return false;
+
+    return !IsCloakHit(*this);
+}
+
 Actor* MagicTarget::GetTargetAsActor()
 {
     TP_THIS_FUNCTION(TGetTargetAsActor, Actor*, MagicTarget);
@@ -217,6 +243,14 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
             return false;
         }
 
+        // An NPC run by this client hit another player, see IsNpcAttackOnPlayer().
+        if (arData.pCaster->GetExtension()->IsLocal() && arData.IsNpcAttackOnPlayer())
+        {
+            DamageDiagnostics::OnSpellHitSent(pTargetActor, arData.pCaster, arData.pSpell->GetName(), arData.pEffectItem->pEffectSetting->formID, arData.fMagnitude);
+            World::Get().GetRunner().Trigger(addTargetEvent);
+            return false;
+        }
+
         if (arData.pCaster->GetExtension()->IsLocalPlayer() && IsSelfCastAreaAttack(arData) && !IsChanneledParalysis(arData))
         {
             addTargetEvent.IsPvpForwarded = true;
@@ -273,6 +307,11 @@ bool TP_MAKE_THISCALL(HookAddTarget, MagicTarget, MagicTarget::AddTargetData& ar
                 if (IsCloakHit(arData))
                     return false;
             }
+            // The NPC's owner sends this hit, see IsNpcAttackOnPlayer().
+            else if (pCasterExtension->IsRemote() && arData.IsNpcAttackOnPlayer())
+            {
+                return false;
+            }
             else if (pCasterExtension->IsRemote() && arData.pCaster->IsPlayerSummon() && arData.pSpell->iHostileCount > 0)
             {
                 if (!World::Get().GetServerSettings().PvpEnabled)
@@ -325,11 +364,13 @@ bool TP_MAKE_THISCALL(HookCheckAddEffectTargetData, MagicTarget::AddTargetData, 
     Actor* pTargetActor = (*static_cast<MagicTarget**>(arArgs))->GetTargetAsActor();
     const bool cIsAttackFromPlayer = pTargetActor && pTargetActor->GetExtension()->IsLocalPlayer() && apThis->pCaster && apThis->pCaster->GetExtension()->IsRemotePlayer()
         && !apThis->pSpell->IsHealingSpell() && !apThis->pSpell->IsBuffSpell() && World::Get().GetServerSettings().PvpEnabled;
+    // The same goes for an NPC's hit that the client running the NPC sent, see IsNpcAttackOnPlayer().
+    const bool cIsAttackFromNpc = pTargetActor && pTargetActor->GetExtension()->IsLocalPlayer() && apThis->pCaster && apThis->pCaster->GetExtension()->IsRemote() && apThis->IsNpcAttackOnPlayer();
 
-    if (s_autoSucceedEffectCheck && !cIsAttackFromPlayer)
+    if (s_autoSucceedEffectCheck && !cIsAttackFromPlayer && !cIsAttackFromNpc)
         return true;
 
-    s_isCheckingAttackFromPlayer = cIsAttackFromPlayer;
+    s_isCheckingAttackFromPlayer = cIsAttackFromPlayer || cIsAttackFromNpc;
     s_isCheckingParalysis = apThis->pEffectItem->pEffectSetting->eArchetype == EffectArchetypes::ArchetypeID::kParalysis;
     const bool cResult = TiltedPhoques::ThisCall(RealCheckAddEffectTargetData, apThis, arArgs, afResistance);
     s_isCheckingAttackFromPlayer = false;

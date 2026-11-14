@@ -40,6 +40,7 @@ uint64_t s_nextId = 1;
 std::deque<Record> s_localHits;
 std::deque<Record> s_receivedHits;
 std::deque<Record> s_broadcasts;
+std::deque<Record> s_receivedSpells;
 
 long long Ms(Clock::duration aDuration) noexcept
 {
@@ -163,6 +164,37 @@ void OnPlayerHitReceived(Actor* apAttacker, float aPhysicalDamage, float aAfterA
         aPhysicalDamage, aAfterArmor, aAfterPerks, aHealthBefore, aHealthAfter, Difficulty());
     if (cTwin)
         spdlog::warn("[DmgDiag] #{} FLAG DUP_RECEIVED_HIT: same attacker and damage as #{} {} ms earlier", cRecord.Id, cTwin->Id, Ms(cRecord.Time - cTwin->Time));
+}
+
+void OnSpellHitSent(Actor* apHittee, Actor* apCaster, const char* acpSpellName, uint32_t aEffectId, float aMagnitude) noexcept
+{
+    if (!apHittee || aMagnitude < kMinLoggedDamage)
+        return;
+
+    std::scoped_lock lock(s_lock);
+    const uint64_t cId = s_nextId++;
+    spdlog::info(
+        "[DmgDiag] #{} SENT spell caster={} victim={} spell={} effect={:X} magnitude={:.1f}, the victim's client applies resistances and difficulty", cId, Describe(apCaster),
+        Describe(apHittee), acpSpellName && *acpSpellName ? acpSpellName : "?", aEffectId, aMagnitude);
+}
+
+void OnSpellHitReceived(Actor* apCaster, const char* acpSpellName, uint32_t aEffectId, float aMagnitude, bool aApplied, float aHealthBefore, float aHealthAfter) noexcept
+{
+    if (aMagnitude < kMinLoggedDamage)
+        return;
+
+    std::scoped_lock lock(s_lock);
+    const Record cRecord{s_nextId++, Clock::now(), apCaster ? apCaster->formID : 0, aEffectId, aMagnitude};
+    const auto cTwin = Track(s_receivedSpells, cRecord);
+
+    // Health can drop a frame later, when the effect starts.
+    spdlog::info(
+        "[DmgDiag] #{} RECV spell caster={} spell={} effect={:X} magnitude={:.1f} applied={} hp {:.1f} -> {:.1f} diff={}", cRecord.Id, Describe(apCaster),
+        acpSpellName && *acpSpellName ? acpSpellName : "?", aEffectId, aMagnitude, aApplied ? "yes" : "no", aHealthBefore, aHealthAfter, Difficulty());
+    if (!aApplied)
+        spdlog::warn("[DmgDiag] #{} FLAG SPELL_REFUSED: the game refused it, resisted in full, blocked by a condition or already active", cRecord.Id);
+    if (cTwin)
+        spdlog::warn("[DmgDiag] #{} FLAG DUP_RECEIVED_SPELL: same caster, effect and magnitude as #{} {} ms earlier", cRecord.Id, cTwin->Id, Ms(cRecord.Time - cTwin->Time));
 }
 
 void OnHealthBroadcastReceived(uint32_t aServerId, float aDelta) noexcept

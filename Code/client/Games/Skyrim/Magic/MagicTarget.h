@@ -46,6 +46,8 @@ struct MagicTarget
 
         bool ShouldSync();
         bool IsForbiddenEffect(Actor* apTarget);
+        // A hostile spell or enchantment from an NPC that the client running the NPC sends to the player it hits.
+        bool IsNpcAttackOnPlayer() const noexcept;
 
         Actor* pCaster;
         MagicItem* pSpell;
