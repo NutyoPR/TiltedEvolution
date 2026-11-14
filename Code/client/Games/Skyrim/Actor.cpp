@@ -1088,11 +1088,24 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
                 return false;
         }
 
+        // An NPC owned by another client: its copy here only replays the swing and misses most of the time.
+        // The owner's client sees the real hit and sends it, it lands through Actor::ApplyHitFromOwner().
+        if (apHitter && apHitter->GetExtension()->IsRemote() && !apHitter->GetExtension()->IsPlayer())
+            return false;
+
         World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -realDamage));
         return TiltedPhoques::ThisCall(RealDamageActor, apThis, aDamage, apHitter, aKillMove);
     }
     else if (pExHittee->IsRemotePlayer())
     {
+        // An NPC owned here hit another player. Send the raw hit to that player's client, which applies it to
+        // itself with its own difficulty, see Actor::ApplyHitFromOwner().
+        if (apHitter && apHitter->GetExtension()->IsLocal() && !apHitter->GetExtension()->IsPlayer() &&
+            (World::Get().GetServerSettings().PvpEnabled || !apHitter->IsPlayerSummon()))
+        {
+            World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -aDamage));
+        }
+
         return wouldKill;
     }
 
@@ -1119,6 +1132,13 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
     {
         return wouldKill;
     }
+}
+
+void Actor::ApplyHitFromOwner(float aRawDamage) noexcept
+{
+    // Runs the game's own damage, so difficulty, bleedout and death work like for a local hit. Calls the original
+    // directly so the hook doesn't treat it as a new hit. Other clients pick up the new health from the actor value sync.
+    TiltedPhoques::ThisCall(RealDamageActor, this, aRawDamage, static_cast<Actor*>(nullptr), false);
 }
 
 TP_THIS_FUNCTION(TApplyActorEffect, void, ActiveEffect, Actor* apTarget, float aEffectValue, unsigned int unk1);

@@ -301,6 +301,17 @@ void ActorValueService::OnHealthChangeBroadcast(const NotifyHealthChangeBroadcas
     if (!pActor->GetExtension()->IsPlayer() && pActor->GetExtension()->IsRemote() && pActor->IsDead())
         return;
 
+    // A player's health is owned by their own client. A delta for the local player is a hit that the attacking NPC's
+    // owner saw, see HookDamageActor(). Copies of other players take their owner's health from the actor value sync.
+    if (pActor->GetExtension()->IsLocalPlayer())
+    {
+        if (acMessage.DeltaHealth < 0.f)
+            pActor->ApplyHitFromOwner(-acMessage.DeltaHealth);
+        return;
+    }
+    if (pActor->GetExtension()->IsRemotePlayer())
+        return;
+
     const float newHealth = pActor->GetActorValue(ActorValueInfo::kHealth) + acMessage.DeltaHealth;
     if (!pActor->GetExtension()->IsPlayer() && pActor->GetExtension()->IsRemote() && !pActor->IsDead() && newHealth <= 0.f)
     {
@@ -349,6 +360,13 @@ void ActorValueService::OnActorValueChanges(const NotifyActorValueChanges& acMes
 
     for (const auto& [key, value] : acMessage.Values)
     {
+        // Regen and heals aren't sent as deltas, so a remote player's health has to follow their own client's value.
+        if (key == ActorValueInfo::kHealth && pActor->GetExtension()->IsRemotePlayer())
+        {
+            pActor->ForceActorValue(ActorValueOwner::ForceMode::DAMAGE, key, value);
+            continue;
+        }
+
         // Syncing dragon souls triggers "Dragon soul collected" event
         if (key == ActorValueInfo::kDragonSouls || key == ActorValueInfo::kHealth)
             continue;

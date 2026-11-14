@@ -242,6 +242,7 @@ struct Actor : TESObjectREFR
     void DispelAllSpells(bool aNow = false) noexcept;
     void Reset() noexcept;
     void Kill() noexcept;
+    void ApplyHitFromOwner(float aRawDamage) noexcept;
     void Respawn() noexcept;
     void PickUpObject(TESObjectREFR* apObject, int32_t aCount, bool aUnk1, float aUnk2) noexcept;
     void SpeakSound(const char* pFile);
