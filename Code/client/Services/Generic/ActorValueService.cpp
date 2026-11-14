@@ -99,6 +99,7 @@ void ActorValueService::OnActorRemoved(const ActorRemovedEvent& acEvent) noexcep
 void ActorValueService::OnUpdate(const UpdateEvent& acEvent) noexcept
 {
     RunSmallHealthUpdates();
+    RunPlayerHealthUpdates();
     RunDeathStateUpdates();
     RunActorValuesUpdates();
 }
@@ -232,6 +233,51 @@ void ActorValueService::RunSmallHealthUpdates() noexcept
         }
 
         m_smallHealthChanges.clear();
+    }
+}
+
+void ActorValueService::RunPlayerHealthUpdates() noexcept
+{
+    static std::chrono::steady_clock::time_point lastSendTimePoint;
+    constexpr auto cDelayBetweenUpdates = 250ms;
+
+    const auto now = std::chrono::steady_clock::now();
+    if (now - lastSendTimePoint < cDelayBetweenUpdates)
+        return;
+
+    lastSendTimePoint = now;
+
+    if (!m_transport.IsConnected())
+        return;
+
+    auto view = m_world.view<FormIdComponent, LocalComponent, ActorValuesComponent>();
+    for (auto entity : view)
+    {
+        const auto& formIdComponent = view.get<FormIdComponent>(entity);
+        // 0x14 is the player character.
+        if (formIdComponent.Id != 0x14)
+            continue;
+
+        Actor* const pActor = Cast<Actor>(TESForm::GetById(formIdComponent.Id));
+        if (!pActor)
+            return;
+
+        auto& actorValuesComponent = view.get<ActorValuesComponent>(entity);
+        const float cHealth = pActor->GetActorValue(ActorValueInfo::kHealth);
+        float& sentHealth = actorValuesComponent.CurrentActorValues.ActorValuesList[ActorValueInfo::kHealth];
+        if (cHealth == sentHealth)
+            return;
+
+        // Also keeps BroadcastActorValues() from sending the same value again.
+        sentHealth = cHealth;
+
+        const auto& localComponent = view.get<LocalComponent>(entity);
+        RequestActorValueChanges request;
+        request.Id = localComponent.Id;
+        request.OwnershipEpoch = localComponent.OwnershipEpoch;
+        request.Values.insert({ActorValueInfo::kHealth, cHealth});
+        m_transport.Send(request);
+        return;
     }
 }
 

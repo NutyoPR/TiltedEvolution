@@ -1081,16 +1081,10 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
     const auto* pExHittee = apThis->GetExtension();
     if (pExHittee->IsLocalPlayer())
     {
-        if (!World::Get().GetServerSettings().PvpEnabled)
-        {
-            // A remote player's summon counts too, its copy swings at whatever the owner's client tells it to.
-            if (apHitter && (apHitter->GetExtension()->IsRemotePlayer() || (apHitter->GetExtension()->IsRemote() && apHitter->IsPlayerSummon())))
-                return false;
-        }
-
-        // An NPC owned by another client: its copy here only replays the swing and misses most of the time.
-        // The owner's client sees the real hit and sends it, it lands through Actor::ApplyHitFromOwner().
-        if (apHitter && apHitter->GetExtension()->IsRemote() && !apHitter->GetExtension()->IsPlayer())
+        // A remote player or an NPC owned by another client: its copy here only replays the swing and misses most
+        // of the time. The attacker's own client sees the real hit and sends it, it lands through
+        // Actor::ApplyHitFromOwner(). That client also applies the PvP setting.
+        if (apHitter && apHitter->GetExtension()->IsRemote())
             return false;
 
         World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -realDamage));
@@ -1098,12 +1092,13 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
     }
     else if (pExHittee->IsRemotePlayer())
     {
-        // An NPC owned here hit another player. Send the raw hit to that player's client, which applies it to
-        // itself with its own difficulty, see Actor::ApplyHitFromOwner().
-        if (apHitter && apHitter->GetExtension()->IsLocal() && !apHitter->GetExtension()->IsPlayer() &&
-            (World::Get().GetServerSettings().PvpEnabled || !apHitter->IsPlayerSummon()))
+        // The local player or an NPC owned here hit another player. Send the raw hit to that player's client, which
+        // applies it to itself with its own difficulty, like a hit from an enemy, see Actor::ApplyHitFromOwner().
+        if (apHitter && apHitter->GetExtension()->IsLocal())
         {
-            World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -aDamage));
+            const bool cFromPlayer = apHitter->GetExtension()->IsPlayer() || apHitter->IsPlayerSummon();
+            if (World::Get().GetServerSettings().PvpEnabled || !cFromPlayer)
+                World::Get().GetRunner().Trigger(HealthChangeEvent(apThis->formID, -aDamage));
         }
 
         return wouldKill;

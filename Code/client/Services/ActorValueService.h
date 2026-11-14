@@ -103,6 +103,13 @@ private:
      * @brief Checks and broadcasts death state changes.
      */
     void RunDeathStateUpdates() noexcept;
+    /**
+     * @brief Sends the local player's health when it changed, more often than the other actor values.
+     *
+     * Other clients take a player's health only from this sync, so hits, regen and heals all show up
+     * within a quarter second for everyone nearby, party or not.
+     */
+    void RunPlayerHealthUpdates() noexcept;
 
     /**
      * @brief Checks and broadcasts actor values.
