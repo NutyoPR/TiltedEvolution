@@ -1128,11 +1128,23 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
     const auto* pExHittee = apThis->GetExtension();
     if (pExHittee->IsLocalPlayer())
     {
-        // A remote player or an NPC owned by another client: its copy here only replays the swing and misses most
-        // of the time. The attacker's own client sees the real hit and sends it, it lands through
-        // Actor::ApplyHitFromOwner(). That client also applies the PvP setting.
         if (apHitter && apHitter->GetExtension()->IsRemote())
-            return false;
+        {
+            // A weapon hit from a remote player or an NPC owned by another client: its copy here only replays the
+            // swing and misses most of the time. The attacker's own client sees the real hit and sends it, it lands
+            // through Actor::ApplyHitFromOwner(). That client also applies the PvP setting.
+            if (s_pProcessedHitData)
+            {
+                // ProcessHitData calls this once per hit, anything it triggers after that isn't the weapon hit.
+                s_pProcessedHitData = nullptr;
+                return false;
+            }
+
+            // Spell damage (Blizzard, Ice Spike) comes through here from the effect the attacker's client sent, see
+            // MagicTarget::AddTargetData::IsAttackOnPlayer(). It has to land, except from a player without PvP.
+            if (!World::Get().GetServerSettings().PvpEnabled && (apHitter->GetExtension()->IsPlayer() || apHitter->IsPlayerSummon()))
+                return false;
+        }
 
         return applyHere("hittee-local-player");
     }
