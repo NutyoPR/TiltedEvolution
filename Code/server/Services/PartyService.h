@@ -71,4 +71,7 @@ private:
     entt::scoped_connection m_partyKickConnection;
 
     void SendPartyJoinedEvent(Party& aParty, Player* aPlayer) noexcept;
+    // Adds the player once and points their component at the party; false if they were already a member
+    bool AddPlayerToParty(uint32_t aPartyId, Party& aParty, Player* apPlayer) noexcept;
+    void LogPartyMembers(const char* acReason, uint32_t aPartyId, const Party& acParty) const noexcept;
 };

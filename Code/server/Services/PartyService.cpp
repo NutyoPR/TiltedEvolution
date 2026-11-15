@@ -64,10 +64,28 @@ PartyService::Party* PartyService::GetPlayerParty(Player* const apPlayer) noexce
     auto& inviterPartyComponent = apPlayer->GetParty();
     if (inviterPartyComponent.JoinedPartyId)
     {
-        return &m_parties[*inviterPartyComponent.JoinedPartyId];
+        // find, not operator[]: a stale id must not create an empty phantom party
+        auto itor = m_parties.find(*inviterPartyComponent.JoinedPartyId);
+        if (itor != std::end(m_parties))
+            return &itor.value();
     }
 
     return nullptr;
+}
+
+bool PartyService::AddPlayerToParty(uint32_t aPartyId, Party& aParty, Player* apPlayer) noexcept
+{
+    auto& members = aParty.Members;
+    if (std::find(std::begin(members), std::end(members), apPlayer) != std::end(members))
+    {
+        spdlog::warn("[PartyService]: Player {} is already a member of party {}, not adding them again", apPlayer->GetId(), aPartyId);
+        apPlayer->GetParty().JoinedPartyId = aPartyId;
+        return false;
+    }
+
+    members.push_back(apPlayer);
+    apPlayer->GetParty().JoinedPartyId = aPartyId;
+    return true;
 }
 
 void PartyService::OnUpdate(const UpdateEvent& acEvent) noexcept
@@ -109,9 +127,8 @@ void PartyService::OnPartyCreate(const PacketEvent<PartyCreateRequest>& acPacket
     {
         uint32_t partyId = m_nextId++;
         Party& party = m_parties[partyId];
-        party.Members.push_back(player);
+        AddPlayerToParty(partyId, party, player);
         party.LeaderPlayerId = player->GetId();
-        inviterPartyComponent.JoinedPartyId = partyId;
 
         spdlog::debug("[PartyService]: Created party for {}", player->GetId());
         SendPartyJoinedEvent(party, player);
@@ -120,12 +137,10 @@ void PartyService::OnPartyCreate(const PacketEvent<PartyCreateRequest>& acPacket
         {
             for (Player* otherPlayer : m_world.GetPlayerManager())
             {
-                if (otherPlayer->GetId() != player->GetId())
+                if (otherPlayer->GetId() != player->GetId() && !IsPlayerInParty(otherPlayer))
                 {
-                    party.Members.push_back(otherPlayer);
-                    otherPlayer->GetParty().JoinedPartyId = partyId;
-
-                    SendPartyJoinedEvent(party, otherPlayer);
+                    if (AddPlayerToParty(partyId, party, otherPlayer))
+                        SendPartyJoinedEvent(party, otherPlayer);
                 }
             }
 
@@ -213,21 +228,22 @@ void PartyService::OnPlayerJoin(const PlayerJoinEvent& acEvent) noexcept
 
     GameServer::Get()->SendToPlayers(notify, acEvent.pPlayer);
 
-    if (m_parties.size() == 1 && GameServer::Get()->AllowsAutoPartyJoin())
+    if (m_parties.size() == 1 && GameServer::Get()->AllowsAutoPartyJoin() && !IsPlayerInParty(acEvent.pPlayer))
     {
         for (Player* player : m_world.GetPlayerManager())
         {
-            if (IsPlayerInParty(player))
+            if (player != acEvent.pPlayer && IsPlayerInParty(player))
             {
-                auto& playerPartyComponent = player->GetParty();
-                Party& party = m_parties[*playerPartyComponent.JoinedPartyId];
+                const uint32_t cPartyId = *player->GetParty().JoinedPartyId;
+                auto partyItor = m_parties.find(cPartyId);
+                if (partyItor == std::end(m_parties))
+                    break;
 
-                party.Members.push_back(acEvent.pPlayer);
-                acEvent.pPlayer->GetParty().JoinedPartyId = *playerPartyComponent.JoinedPartyId;
+                Party& party = partyItor.value();
+                if (AddPlayerToParty(cPartyId, party, acEvent.pPlayer))
+                    SendPartyJoinedEvent(party, acEvent.pPlayer);
 
-                SendPartyJoinedEvent(party, acEvent.pPlayer);
-
-                BroadcastPartyInfo(*playerPartyComponent.JoinedPartyId);
+                BroadcastPartyInfo(cPartyId);
 
                 break;
             }
@@ -325,8 +341,7 @@ void PartyService::OnPartyAcceptInvite(const PacketEvent<PartyAcceptInviteReques
             return;
         }
 
-        party.Members.push_back(pSelf);
-        selfPartyComponent.JoinedPartyId = partyId;
+        AddPlayerToParty(partyId, party, pSelf);
 
         spdlog::debug("[PartyService]: Added invitee to party, sending events");
         SendPartyJoinedEvent(party, pSelf);
@@ -354,10 +369,24 @@ void PartyService::RemovePlayerFromParty(Player* apPlayer) noexcept
     {
         auto id = *pPartyComponent->JoinedPartyId;
 
-        Party& party = m_parties[id];
+        auto partyItor = m_parties.find(id);
+        if (partyItor == std::end(m_parties))
+        {
+            spdlog::warn("[PartyService]: Player {} points at party {} which no longer exists", apPlayer->GetId(), id);
+            pPartyComponent->JoinedPartyId.reset();
+            NotifyPartyLeft leftMessage;
+            apPlayer->Send(leftMessage);
+            return;
+        }
+
+        Party& party = partyItor.value();
         auto& members = party.Members;
 
-        members.erase(std::find(std::begin(members), std::end(members), apPlayer));
+        // erase every copy: erase(find()) on a missing player was undefined behaviour, and a duplicate would stay behind
+        const auto cBefore = members.size();
+        members.erase(std::remove(std::begin(members), std::end(members), apPlayer), std::end(members));
+        if (cBefore - members.size() != 1)
+            spdlog::warn("[PartyService]: Player {} was in party {} {} times", apPlayer->GetId(), id, cBefore - members.size());
 
         if (members.empty())
         {
@@ -423,6 +452,8 @@ void PartyService::BroadcastPartyInfo(uint32_t aPartyId) const noexcept
         message.PlayerIds.push_back(pPlayer->GetId());
     }
 
+    LogPartyMembers("updated", aPartyId, party);
+
     for (auto pPlayer : members)
     {
         message.IsLeader = pPlayer->GetId() == party.LeaderPlayerId;
@@ -441,4 +472,19 @@ void PartyService::SendPartyJoinedEvent(Party& aParty, Player* aPlayer) noexcept
     }
     spdlog::debug("[PartyService]: Sending party join event to player");
     aPlayer->Send(joinedMessage);
+}
+
+void PartyService::LogPartyMembers(const char* acReason, uint32_t aPartyId, const Party& acParty) const noexcept
+{
+    // Info level on purpose: the default sLogLevel=info hides the debug lines, and this is what we need to
+    // check that the member list matches the players on the server.
+    String ids;
+    for (const Player* pPlayer : acParty.Members)
+    {
+        if (!ids.empty())
+            ids += ",";
+        ids += std::to_string(pPlayer->GetId()).c_str();
+    }
+    spdlog::info("[PartyService]: party {} {}: leader {}, {} members [{}], {} players connected", aPartyId, acReason, acParty.LeaderPlayerId,
+                 acParty.Members.size(), ids.c_str(), m_world.GetPlayerManager().Count());
 }
