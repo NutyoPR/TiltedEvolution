@@ -5,6 +5,17 @@ on:
   push:
     branches:
       - master
+  # Manual run (Actions tab or `gh workflow run linux.yml --ref <branch>`), uploads the server archive
+  workflow_dispatch:
+    inputs:
+      build-mode:
+        required: false
+        type: string
+        default: releasedbg
+      upload-build-for-next-job:
+        required: false
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       build-mode:
@@ -94,6 +105,8 @@ jobs:
         if: ${{ inputs.upload-build-for-next-job }}
         run: |
           version="${GITHUB_REF_NAME#v}"
+          # Branch names like play/enderal contain a slash, which is not valid in a file name
+          version="${version//\//-}"
           echo "ARTIFACT_VERSION=$version" >> "$GITHUB_ENV"
           mkdir -p release-assets
           tar -C release-stage -czf \
