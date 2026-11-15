@@ -1,4 +1,5 @@
 #include <Games/References.h>
+#include <Systems/PartyDamageSystem.h>
 #include <cstring>
 #include <Games/Skyrim/EquipManager.h>
 #include <AI/AIProcess.h>
@@ -1122,7 +1123,7 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
         World::Get().GetRunner().Trigger(HitEvent(apHitter->formID, apThis->formID));
 
     const float cIncoming = aDamage;
-    const float cPartyMultiplier = GameplayFormulas::GetPartyDamageMultiplier(apHitter);
+    const float cPartyMultiplier = PartyDamageSystem::GetMultiplier(apHitter, apThis);
     aDamage *= cPartyMultiplier;
 
     float realDamage = GameplayFormulas::CalculateRealDamage(apThis, aDamage, aKillMove);
@@ -1142,9 +1143,23 @@ bool TP_MAKE_THISCALL(HookDamageActor, Actor, float aDamage, Actor* apHitter, bo
         const bool cResult = TiltedPhoques::ThisCall(RealDamageActor, apThis, aDamage, apHitter, aKillMove);
         DamageDiagnostics::OnDamageApplied(cHitId, apThis, currentHealth);
         if (cLogHit)
-            spdlog::info("[PartyDamage] {}: target {:X} ({}), hitter {:X}, incoming {:.2f}, flag {}, party x{:.3f}, sent {:.2f}, engine applied {:.2f}",
+        {
+            const auto& partyService = World::Get().GetPartyService();
+            const auto& rawMembers = partyService.GetPartyMembers();
+            String rawIds;
+            for (uint32_t id : rawMembers)
+            {
+                if (!rawIds.empty())
+                    rawIds += ",";
+                rawIds += std::to_string(id).c_str();
+            }
+            spdlog::info("[PartyDamage] {}: target {:X} ({}), hitter {:X}, incoming {:.2f}, flag {}, party x{:.3f} (scale {:.2f}, local id {}, raw members {} [{}], "
+                         "known players {}, counted {}), sent {:.2f}, engine applied {:.2f}",
                          acpPath, apThis->formID, pExHittee->IsLocal() ? "owned here" : "owned remotely", apHitter->formID, cIncoming, aKillMove,
-                         cPartyMultiplier, realDamage, currentHealth - apThis->GetActorValue(ActorValueInfo::kHealth));
+                         cPartyMultiplier, World::Get().GetServerSettings().PartyDamageScale, World::Get().GetTransport().GetLocalPlayerId(),
+                         rawMembers.size(), rawIds.c_str(), partyService.GetPlayers().size(), PartyDamageSystem::CountActiveMembers(), realDamage,
+                         currentHealth - apThis->GetActorValue(ActorValueInfo::kHealth));
+        }
         return cResult;
     };
 

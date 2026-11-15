@@ -42,7 +42,7 @@ Console::Setting uTimeScale{"Gameplay:uTimeScale", "How many seconds pass ingame
 Console::Setting bSyncPlayerCalendar{"Gameplay:bSyncPlayerCalendar", "Syncs up all player calendars to be the same day, month, and year. This uses the date of the player with the furthest ahead date at connection.", false};
 Console::Setting bAutoPartyJoin{"Gameplay:bAutoPartyJoin", "Join parties automatically, as long as there is only one party in the server", true};
 Console::Setting bEnableItemDrops{"Gameplay:bEnableItemDrops", "Syncs items dropped by players", true};
-Console::Setting fPartyDamageScale{"Gameplay:fPartyDamageScale", "Longer fights in a party: 1 = damage from players, their spells and their summons is divided by the number of party members (like enemies having party size x health), 0 = off. Any other value counts as 1. NPCs and followers keep full damage", 0.0f};
+Console::Setting fPartyDamageScale{"Gameplay:fPartyDamageScale", "Longer fights in a party: 1 = damage from players, their spells and their summons is divided by the number of party members (like enemies having party size x health), 0 = off. Any value above 0 counts as 1. Only damage to NPCs is scaled; NPCs and followers keep full damage", 0.0f};
 Console::Setting bAllowConsoleCommands{"Gameplay:bAllowConsoleCommands", "Lets players run console commands they type while connected. Turn it off to stop console trolling such as spawning enemies or killing NPCs. The console still opens for reading ids, and mods can still run commands", true};
 // ModPolicy Stuff
 Console::Setting bEnableModCheck{"ModPolicy:bEnableModCheck", "Refuse clients whose mods do not match Data/loadorder.txt", false, Console::SettingsFlags::kLocked};
