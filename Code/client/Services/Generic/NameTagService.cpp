@@ -38,6 +38,15 @@ float SmoothStep(float aEdge0, float aEdge1, float aValue) noexcept
     return t * t * (3.f - 2.f * t);
 }
 
+// Remote players replay the owner's behavior variables, iIsInSneak included (0_master, werewolf and vampire lord
+// graphs all have it), so this matches the sneak pose the viewer sees.
+bool IsInSneak(Actor* apActor) noexcept
+{
+    static BSFixedString s_isInSneak("iIsInSneak");
+    uint32_t isInSneak = 0;
+    return apActor->animationGraphHolder.GetVariableInt(&s_isInSneak, &isInSneak) && isInSneak != 0;
+}
+
 bool HasAllGlyphs(ImFont* apFont, const String& acText) noexcept
 {
     const char* pText = acText.c_str();
@@ -303,8 +312,18 @@ void NameTagService::OnDraw() noexcept
 
         const bool isPartyMember = std::find(partyMembers.begin(), partyMembers.end(), playerComponent.Id) != partyMembers.end();
 
-        // A floating chat line shows even where the name tag filter hides the tag.
         const auto lineIt = m_floatingLines.find(playerComponent.Id);
+
+        // Sneaking players show neither a tag nor floating chat. Their line is dropped rather than paused, so it
+        // doesn't pop back up when they stand.
+        if (IsInSneak(pActor))
+        {
+            if (lineIt != m_floatingLines.end())
+                m_floatingLines.erase(lineIt);
+            continue;
+        }
+
+        // A floating chat line shows even where the name tag filter hides the tag.
         const bool hasLine = lineIt != m_floatingLines.end() && lineIt->second.ExpiresAt > tick;
         if (!hasLine && !IsEnabledFor(m_settings.NameTags, isPartyMember))
             continue;
