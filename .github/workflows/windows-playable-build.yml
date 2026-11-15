@@ -23,3 +23,10 @@ jobs:
       build-mode: release
       skyrim-version: ${{ matrix.skyrim-version }}
       upload-build-for-next-job: true
+
+  build-linux-server:
+    if: ${{ github.repository_owner == 'tiltedphoques' || github.event_name != 'schedule' }} # Disable cron runs in forks
+    uses: ./.github/workflows/linux.yml
+    with:
+      build-mode: release
+      upload-build-for-next-job: true
