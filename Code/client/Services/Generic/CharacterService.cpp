@@ -2202,7 +2202,7 @@ void CharacterService::RunRemoteUpdates() noexcept
         auto& remoteComponent = interpolatedEntities.get<RemoteComponent>(entity);
         const bool cDeadNpc = pActor && !pActor->GetExtension()->IsPlayer() && (remoteComponent.IsDead || pActor->IsDead());
         // Keep position synchronization, but do not overwrite a corpse's animation graph.
-        InterpolationSystem::Update(pActor, interpolationComponent, cNow, !cDeadNpc);
+        InterpolationSystem::Update(pActor, interpolationComponent, cNow, !cDeadNpc, cDeadNpc && pActor->IsDead());
 
         if (!cDeadNpc || !remoteComponent.IsDead)
             continue;
